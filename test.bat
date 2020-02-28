@@ -1,0 +1,1 @@
+cargo run -- --input tests/simple.sdf --output tests/simple.glsl

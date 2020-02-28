@@ -1,0 +1,21 @@
+// Simple test case
+// First goal: generate GLSL from this example
+
+// Scenes
+Scene main {
+    // Type inferrence (defaults to int)
+    let x = 7;
+    // Type specification
+    let y: int = 10;
+
+    // Assignment via expression
+    let z = x + y;
+
+    // SDF object (with defaults)
+    let box: Cube {
+        length: 1,
+        width: 1,
+        height: 1,
+        position: vec3{0, 0, 0},
+    };
+}
