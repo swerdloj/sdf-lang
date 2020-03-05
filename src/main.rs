@@ -2,6 +2,8 @@
 // 2 - Parser(Tokens) -> AST
 // 3 - ??
 
+extern crate regex;
+
 mod environment;
 mod lexer;
 
@@ -14,7 +16,8 @@ fn main() {
     let input = std::fs::read_to_string(&env.input_path).expect("Failed to read input file");
 
 
-    lexer::tokenize_string(input);
+    let lexemes: Vec<lexer::analyze::Lexeme> = lexer::analyze::tokenize_string(input).collect();
+    println!("Lexemes: {:?}", lexemes);
 
     println!("{:?}", env);
 }
