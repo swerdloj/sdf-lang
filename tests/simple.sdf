@@ -9,7 +9,11 @@ Scene main {
     let y: int = 10;
 
     // Assignment via expression
-    let z = x + y;
+    let _z = x + y;
+
+    if x == 12 {
+        y += 1;
+    }
 
     // SDF object (with defaults)
     let box: Cube {

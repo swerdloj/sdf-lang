@@ -2,7 +2,7 @@
 // See https://github.com/rust-lang/rust/blob/master/src/librustc_lexer/src/lib.rs
 
 /// All allowed literal values within the language
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Literal {
     Int,                // Numbers without decimals
     Float,              // Numbers with decimals
@@ -12,14 +12,14 @@ pub enum Literal {
 /// All allowed characters within the language. 
 /// 
 /// Note that this is not a language token, rather a string decomposition
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Lexeme {
     CommentSingle,      // "//"
     CommentMulti,       // "/* .. */"
     
     Whitespace,         // Anything like space, tab, linefeed, etc.
 
-    Literal(Literal),   // Typed values
+    Literal(String),    // Typed values (needs to be parsed)
     Identifier(String), // Includes keywords
     
     Equals,             // "="
@@ -55,96 +55,236 @@ pub enum Lexeme {
 }
 
 pub fn tokenize_string(string: String) -> impl Iterator<Item = Lexeme> {
-    use regex::Regex;
+    // use regex::Regex;
     use super::Cursor;
 
     let mut cursor = Cursor::from_string(string);
 
     /*
         TODO:
-        1. Generate symbolic tokens (string analysis)
-        2. Generate language tokens (token stream analysis)
+
+        Track line number & column
+        Report errors with useful information
     */
 
-    // underscore followed by numbers/characters/underscores OR character followed by numbers/characters/underscores
-    let literal_regex = Regex::new(r"(_)*+([a-bA-z]+(_)+[0-9])*").unwrap();
-
-
-    println!("Tokenizing string");
+    println!("Tokenizing string...");
 
     std::iter::from_fn(move || {
         if cursor.is_finished() {
             None
         } else {
-            Some(match_lexeme(&mut cursor))
+            Some(next_lexeme(&mut cursor))
         }
     })
 }
 
-fn match_lexeme(cursor: &mut super::Cursor) -> Lexeme {
+pub fn strip(lexemes: &mut Vec<Lexeme>) {
+    use Lexeme::*;
+
+    lexemes.retain(|lexeme| {
+        match lexeme {
+            Whitespace 
+            | CommentMulti
+            | CommentSingle => false,
+
+            _ => true,
+        }
+    })
+}
+
+fn next_lexeme(cursor: &mut super::Cursor) -> Lexeme {
     use Lexeme::*;
 
     match cursor.current_character() {
-        "/" => {
-            let next = cursor.peek_ahead(1);
 
-            // FIXME: Temporary
-            // cursor.advance();
-
-
-            if next == "/" {
-                // TODO: Skip to linefeed
-                return CommentSingle;
-            } else if next == "*" {
-                // TODO: Skip to end of comment, then skip linefeed
-                return CommentMulti;
+        // TODO: Allow hexadecimal, etc.
+        // Literals
+        n if n.is_ascii_digit() => {
+            let from = cursor.current;
+            while cursor.current_character().is_ascii_digit() {
+                cursor.advance();
             }
 
-            // TODO: Move the cursor forward as calculated above
+            Literal(cursor.string[from..cursor.current].to_owned())
+        }
 
+        // Identifiers
+        /* FIXME: Why doesn't this binding work? Gives Unknown
+        c @ '_' |                   */
+        c if (c.is_ascii_alphabetic() || c == '_') => {
+            let from = cursor.current;
 
+            let mut current = cursor.current_character();
+            while current.is_ascii_alphanumeric() || current == '_' {
+                cursor.advance();
+                current = cursor.current_character();
+            }
+
+            Identifier(cursor.string[from..cursor.current].to_owned())
+        }
+
+        // Find whitespace and condence to a single Whitespace lexeme
+        '\r'
+        | '\n'
+        | ' '
+        | '\t' => {
+            let is_whitespace = |c: char| -> bool {
+                match c {
+                    '\r' | '\n' | ' ' | '\t' => true,
+                    _ => false,
+                }
+            };
+
+            cursor.advance();
+
+            while is_whitespace(cursor.current_character()) {
+                cursor.advance();
+            }
+
+            Whitespace
+        }
+
+        // Check whether '/' means single line comment, a slash, or a multi-line comment
+        '/' => {
+            let next = cursor.peek(1);
+
+            if next == '/' {
+                // Skip to linefeed
+                if let Some(offset) = cursor.seek_char('\n') {
+                    cursor.advance_by(offset + 1);
+                } else {
+                    // TODO: When would this not work?
+                    panic!("End of file?");
+                }
+                return CommentSingle;
+            } else if next == '*' {
+                // TODO: Skip to end of comment, then skip linefeed
+                panic!("Multi-line comments not yet implemented");
+                // return CommentMulti;
+            }
+
+            cursor.advance();
             Slash
         }
 
-        "{" => {
-            cursor.advance();
-            BraceOpen
-        }
-
-        "}" => {
-            cursor.advance();
-            BraceClose
-        }
-        
-        "=" => {
+        '=' => {
             cursor.advance();
             Equals
         }
         
-        ":" => {
+        ':' => {
             cursor.advance();
             Colon
         }
         
-        ";" => {
+        ',' => {
+            cursor.advance();
+            Comma
+        }
+
+        ';' => {
             cursor.advance();
             Semicolon
         }
         
-        "," => {
-            cursor.advance();
-            Comma
-        }
-        
-        "." => {
+        '.' => {
             cursor.advance();
             Dot
         }
 
-        // TODO: The rest
+        '(' => {
+            cursor.advance();
+            ParenthesisOpen
+        }
 
-        x => {
-            println!("{}", x);
+        ')' => {
+            cursor.advance();
+            ParenthesisClose
+        }
+
+        '{' => {
+            cursor.advance();
+            BraceOpen
+        }
+
+        '}' => {
+            cursor.advance();
+            BraceClose
+        }
+
+        '[' => {
+            cursor.advance();
+            BracketOpen
+        }
+
+        ']' => {
+            cursor.advance();
+            BracketClose
+        }
+
+        '@' => {
+            cursor.advance();
+            At
+        }
+
+        '*' => {
+            cursor.advance();
+            Star
+        }
+
+        '+' => {
+            cursor.advance();
+            Plus
+        }
+
+        '-' => {
+            cursor.advance();
+            Minus
+        }
+
+        '!' => {
+            cursor.advance();
+            Not   
+        }
+
+        '&' => {
+            cursor.advance();
+            And   
+        }
+
+        '|' => {
+            cursor.advance();
+            Or
+        }
+
+        '~' => {
+            cursor.advance();
+            Tilde
+        }
+
+        '<' => {
+            cursor.advance();
+            LessThan   
+        }
+
+        '>' => {
+            cursor.advance();
+            GreaterThan   
+        }
+
+        '^' => {
+            cursor.advance();
+            Caret   
+        }
+
+        '%' => {
+            cursor.advance();
+            Percent   
+        }
+
+        c => {
+            println!("Unknown symbol, '{}'", c);
+            cursor.advance();
             Unknown
         }
     }

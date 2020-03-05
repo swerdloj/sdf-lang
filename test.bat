@@ -1,1 +1,1 @@
-cargo run --quiet -- --input tests/simple.sdf --output tests/simple.glsl
+cargo run -- --input tests/simple.sdf --output tests/simple.glsl
