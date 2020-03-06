@@ -35,11 +35,12 @@ impl Cursor {
 
         while current != character {
             offset += 1;
-            current = self.peek(offset);
-
+            
             if self.current + offset + 1 > self.string.len() {
                 return None;
             }
+
+            current = self.peek(offset);
         }
 
         Some(offset)
@@ -53,6 +54,11 @@ impl Cursor {
     /// Moves the cursor to the given index
     pub fn move_to(&mut self, to: usize) {
         self.current = to;
+    }
+
+    /// Moves cursor to end of string
+    pub fn move_to_end(&mut self) {
+        self.current = self.string.len();
     }
 
     /// Whether the cursor has passed the string

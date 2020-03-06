@@ -4,8 +4,8 @@
 /// All allowed literal values within the language
 #[derive(Debug, PartialEq)]
 pub enum Literal {
-    Int,                // Numbers without decimals
-    Float,              // Numbers with decimals
+    Int(String),        // Numbers without decimals
+    Float(String),      // Numbers with decimals
     // Str,             // NOTE: sdf-lang does not allow strings, chracters, etc. -> Maybe in the future for debugging
 }
 
@@ -19,7 +19,7 @@ pub enum Lexeme {
     
     Whitespace,         // Anything like space, tab, linefeed, etc.
 
-    Literal(String),    // Typed values (needs to be parsed)
+    LiteralValue(Literal),    // Typed values (needs to be parsed)
     Identifier(String), // Includes keywords
     
     Equals,             // "="
@@ -55,7 +55,6 @@ pub enum Lexeme {
 }
 
 pub fn tokenize_string(string: String) -> impl Iterator<Item = Lexeme> {
-    // use regex::Regex;
     use super::Cursor;
 
     let mut cursor = Cursor::from_string(string);
@@ -98,14 +97,36 @@ fn next_lexeme(cursor: &mut super::Cursor) -> Lexeme {
     match cursor.current_character() {
 
         // TODO: Allow hexadecimal, etc.
-        // Literals
+        // Numeric Literals
         n if n.is_ascii_digit() => {
+            // FIXME: Revise this
+
             let from = cursor.current;
-            while cursor.current_character().is_ascii_digit() {
+            let mut current = cursor.current_character();
+            let mut has_decimal = false;
+            
+            while current.is_ascii_digit() || current == '.' {
                 cursor.advance();
+                current = cursor.current_character();
+
+                if current == '.' {
+                    if has_decimal {
+                        panic!("Floating point number has multiple decimal points.");
+                    } else {
+                        has_decimal = true;
+                    }
+                }
             }
 
-            Literal(cursor.string[from..cursor.current].to_owned())
+            let number = cursor.string[from..cursor.current].to_owned();
+
+            LiteralValue(
+                if has_decimal {
+                    Literal::Float(number)
+                } else {
+                    Literal::Int(number)
+                }
+            )
         }
 
         // Identifiers
@@ -153,14 +174,26 @@ fn next_lexeme(cursor: &mut super::Cursor) -> Lexeme {
                 if let Some(offset) = cursor.seek_char('\n') {
                     cursor.advance_by(offset + 1);
                 } else {
-                    // TODO: When would this not work?
-                    panic!("End of file?");
+                    // Comment at end of file
+                    cursor.move_to_end();
                 }
                 return CommentSingle;
             } else if next == '*' {
-                // TODO: Skip to end of comment, then skip linefeed
-                panic!("Multi-line comments not yet implemented");
-                // return CommentMulti;
+                
+                let mut ended = false;
+                while let Some(offset) = cursor.seek_char('*') {
+                    cursor.advance_by(offset + 1);
+                    if cursor.current_character() == '/' {
+                        cursor.advance();
+                        ended = true;
+                    }
+                }
+
+                if !ended {
+                    panic!("Multi-line comment was never ended.");
+                }
+
+                return CommentMulti;
             }
 
             cursor.advance();

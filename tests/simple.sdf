@@ -1,10 +1,16 @@
 // Simple test case
 // First goal: generate GLSL from this example
 
+/* This is a multi-line comment
+    asdf
+    *
+    with symbols: // /
+*/
+
 // Scenes
 Scene main {
-    // Type inferrence (defaults to int)
-    let x = 7;
+    // Type inferrence
+    let x = 7.0;
     // Type specification
     let y: int = 10;
 
@@ -16,7 +22,7 @@ Scene main {
     }
 
     // SDF object (with defaults)
-    let box: Cube {
+    let cube: Box {
         length: 1,
         width: 1,
         height: 1,
