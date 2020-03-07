@@ -8,14 +8,14 @@
 */
 
 // Scenes
-Scene main {
+scene main {
     // Type inferrence
     let x = 7.0;
     // Type specification
     let y: int = 10;
 
     // Assignment via expression
-    let _z = x + y;
+    let _z = x * y;
 
     if x == 12 {
         y += 1;

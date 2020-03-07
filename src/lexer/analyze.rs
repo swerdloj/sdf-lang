@@ -54,7 +54,7 @@ pub enum Lexeme {
     Unknown,            // Invalid character
 }
 
-pub fn tokenize_string(string: String) -> impl Iterator<Item = Lexeme> {
+pub fn analyze_string(string: String) -> impl Iterator<Item = Lexeme> {
     use super::Cursor;
 
     let mut cursor = Cursor::from_string(string);
@@ -77,6 +77,7 @@ pub fn tokenize_string(string: String) -> impl Iterator<Item = Lexeme> {
     })
 }
 
+/// Remove comments and whitespace
 pub fn strip(lexemes: &mut Vec<Lexeme>) {
     use Lexeme::*;
 
@@ -186,6 +187,7 @@ fn next_lexeme(cursor: &mut super::Cursor) -> Lexeme {
                     if cursor.current_character() == '/' {
                         cursor.advance();
                         ended = true;
+                        break; // Found end of comment, stop looking for '*'s
                     }
                 }
 
@@ -198,6 +200,11 @@ fn next_lexeme(cursor: &mut super::Cursor) -> Lexeme {
 
             cursor.advance();
             Slash
+        }
+
+        '"'
+        | '\'' => {
+            panic!("sdf-lang does not support strings or characters");
         }
 
         '=' => {
