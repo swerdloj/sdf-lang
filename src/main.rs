@@ -10,21 +10,16 @@ mod environment;
 #[allow(unused)]
 mod lexer;
 
-use lexer::{analyze, tokenize};
+use lexer::tokenize::{Token, tokenize_string};
 
 fn main() {
     let env = environment::Environment::get();
-    println!("Reading from {:?} ...", &env.input_path);
 
     // Note that file's existence will be checked already
     let input = std::fs::read_to_string(&env.input_path).expect("Failed to read input file");
     println!("{:?}", env);
 
-
-    let mut lexemes: Vec<analyze::Lexeme> = analyze::analyze_string(input).collect();
-    analyze::strip(&mut lexemes);
-    println!("Lexemes: {:#?}", lexemes);
-
-    let tokens: Vec<tokenize::Token> = tokenize::tokenize_lexemes(lexemes).collect();
+    // Transformations: String -> Lexemes -> Tokens
+    let tokens: Vec<Token> = tokenize_string(input);
     print!("Tokens: {:#?}", tokens);
 }

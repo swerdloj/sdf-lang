@@ -3,17 +3,13 @@ use super::analyze::Lexeme;
 #[derive(Debug)]
 pub enum Token {
     Keyword(Keyword),
-    Identifier {
-        name: String,
-        id_type: Primitive,
-        value: Option<String>,
-    },
-    Primitive(Primitive),
+    Identifier(String),
+    Literal(Literal),
     Delimiter(Delimiter),
     BinaryOperator(BinaryOperator),
     UnaryOperator(UnaryOperator),
-    // FIXME: Remove this after finishing implementations
-    Uknown,
+
+    Tag(String),    // "@uniform", etc.
 }
 
 #[derive(Debug)]
@@ -23,24 +19,38 @@ pub enum Keyword {
     Scene,  // "scene"
     Enum,   // "enum"
     Struct, // "struct"
-
+    
     // TODO: Account for GLSL keywords so user cannot use them for variable names, etc.
 }
+
 #[derive(Debug)]
-pub enum Primitive {
-    Vec2,   // "vec2"
-    Vec3,   // "vec3"
-    Vec4,   // "vec4"
-    Int,    // "int"
-    Float,  // "float"
-    Matrix, // "mat#x#"
+pub enum Literal {
+    Float(String),
+    Int(String),
 }
+
+// #[derive(Debug)]
+// pub enum Primitive {
+//     Vec2,   // "vec2"
+//     Vec3,   // "vec3"
+//     Vec4,   // "vec4"
+//     Int,    // "int"
+//     Float,  // "float"
+//     Matrix, // "mat#x#"
+// }
 
 #[derive(Debug)]
 pub enum Delimiter {
-    Comma,      // ","
-    Colon,      // ":"
-    Semicolon,  // ";"
+    Comma,              // ","
+    Colon,              // ":"
+    Semicolon,          // ";"
+
+    ParenthesisOpen,    // "("
+    ParenthesisClose,   // ")"
+    BraceOpen,          // "{"
+    BraceClose,         // "}"
+    BracketOpen,        // "["
+    BracketClose,       // "]"
 }
 
 #[derive(Debug)]
@@ -98,76 +108,168 @@ impl LexemeCursor {
     }
 }
 
+pub fn tokenize_string(input: String) -> Vec<Token> {
+    let lexemes = super::analyze::analyze_string(input);
+    tokenize_lexemes(lexemes).collect()
+}
+
+// TODO: Could probably remove the iterator and just return a `Vec<Token>`
 pub fn tokenize_lexemes(lexemes: Vec<Lexeme>) -> impl Iterator<Item = Token> {
     let mut cursor = LexemeCursor::from_lexemes(lexemes);
 
+    let mut open_parenthesis_stack: Vec<Lexeme> = Vec::new();
+
     std::iter::from_fn(move || {
-        if cursor.current == cursor.lexemes.len() {
-            None
-        } else {
-            Some(next_token(&mut cursor))
-        }
+        next_token(&mut cursor, &mut open_parenthesis_stack)
     })
 }
 
-fn next_token(cursor: &mut LexemeCursor) -> Token {
+fn next_token(cursor: &mut LexemeCursor, parenthesis_stack: &mut Vec<Lexeme>) -> Option<Token> {
+    // FIXME: Parenthesis errors print the open type, but should print close type
     match cursor.current_lexeme() {
+
         // Identifiers
         Lexeme::Identifier(name) => {
             match name.as_str() {
                 "let" => {
                     cursor.advance();
-                    Token::Keyword(Keyword::Let)
+                    Some(Token::Keyword(Keyword::Let))
                 }
 
                 "if" => {
                     cursor.advance();
-                    Token::Keyword(Keyword::If)
+                    Some(Token::Keyword(Keyword::If))
                 }
 
                 "enum" => {
                     cursor.advance();
-                    Token::Keyword(Keyword::Enum)
+                    Some(Token::Keyword(Keyword::Enum))
                 }
 
                 "struct" => {
                     cursor.advance();
-                    Token::Keyword(Keyword::Struct)
+                    Some(Token::Keyword(Keyword::Struct))
                 }
 
                 "scene" => {
                     cursor.advance();
-                    Token::Keyword(Keyword::Scene)
+                    Some(Token::Keyword(Keyword::Scene))
                 }
 
                 // User-defined identifier
                 _ => {
-                    // unimplemented!();
-
                     let id_name = name.clone();
                     cursor.advance();
 
-
-                    Token::Identifier {
-                        name: id_name,
-                        id_type: Primitive::Int,
-                        value: Some("Nothing".to_owned()),
-                    }
+                    Some(Token::Identifier(id_name))
                 }
             }
         }
 
-        // Lexeme::LiteralValue(literal) => {
-        //     match literal {
-        //         super::analyze::Literal::Float(number) => {
-        //             unimplemented!()
-        //         }
+        Lexeme::ParenthesisOpen => {
+            cursor.advance();
+            parenthesis_stack.push(Lexeme::ParenthesisOpen);
+
+            Some(Token::Delimiter(Delimiter::ParenthesisOpen))
+        }
+        
+        Lexeme::ParenthesisClose => {
+            cursor.advance();
+            let kind = parenthesis_stack.pop().expect("Closing parenthesis has no mathing opener");
+
+            if kind != Lexeme::ParenthesisOpen {
+                panic!("Expected '{:?}', found ')'", kind);
+            }
+
+            Some(Token::Delimiter(Delimiter::ParenthesisClose))
+        }
+
+        Lexeme::BraceOpen => {
+            cursor.advance();
+            parenthesis_stack.push(Lexeme::BraceOpen);
+
+            Some(Token::Delimiter(Delimiter::BraceOpen))
+        }
+
+        Lexeme::BraceClose => {
+            cursor.advance();
+            let kind = parenthesis_stack.pop().expect("Closing brace has no mathing opener");
+
+            if kind != Lexeme::BraceOpen {
+                panic!("Expected '{:?}', found '}}'", kind);
+            }
+
+            Some(Token::Delimiter(Delimiter::BraceClose))
+        }
+
+        Lexeme::BracketOpen => {
+            cursor.advance();
+            parenthesis_stack.push(Lexeme::BracketOpen);
+
+            Some(Token::Delimiter(Delimiter::BracketOpen))
+        }
+
+        Lexeme::BracketClose => {
+            cursor.advance();
+            let kind = parenthesis_stack.pop().expect("Closing bracket has no mathing opener");
+
+            if kind != Lexeme::BracketOpen {
+                panic!("Expected '{:?}', found ']'", kind);
+            }
+
+            Some(Token::Delimiter(Delimiter::BracketClose))
+        }
+
+        Lexeme::LiteralValue(literal) => {
+            // FIXME: `r` is an ownership workaround
+            let r = match literal {
+                super::analyze::Literal::Float(number) => {
+                    Token::Literal(Literal::Float(number.clone()))
+                }
                 
-        //         super::analyze::Literal::Int(number) => {
-        //             unimplemented!()
-        //         }
-        //     }
-        // }
+                super::analyze::Literal::Int(number) => {
+                    Token::Literal(Literal::Int(number.clone()))
+                }
+            };
+
+            cursor.advance();
+            Some(r)
+        }
+
+        Lexeme::GreaterThan => {
+            cursor.advance();
+
+            if *cursor.current_lexeme() == Lexeme::Equals {
+                cursor.advance();
+                return Some(Token::BinaryOperator(BinaryOperator::GreaterThanOrEqualTo));
+            }
+
+            Some(Token::BinaryOperator(BinaryOperator::GreaterThan))
+        }
+
+        Lexeme::LessThan => {
+            cursor.advance();
+
+            if *cursor.current_lexeme() == Lexeme::Equals {
+                cursor.advance();
+                return Some(Token::BinaryOperator(BinaryOperator::LessThanOrEqualTo));
+            }
+
+            Some(Token::BinaryOperator(BinaryOperator::LessThan))
+        }
+
+        Lexeme::At => {
+            cursor.advance();
+
+            if let Lexeme::Identifier(name) = cursor.current_lexeme() {
+                let tag_identifier = name.clone();
+                cursor.advance();
+
+                return Some(Token::Tag(tag_identifier));
+            } else {
+                panic!("Expected '@<identifier>', found only '@'");
+            }
+        }
 
         Lexeme::And => {
             cursor.advance();
@@ -175,9 +277,21 @@ fn next_token(cursor: &mut LexemeCursor) -> Token {
             // And comparison
             if *cursor.current_lexeme() == Lexeme::And {
                 cursor.advance();
-                return Token::BinaryOperator(BinaryOperator::And);
+                return Some(Token::BinaryOperator(BinaryOperator::And));
             } else {
                 panic!("Expected '&&', found '&'");
+            }
+        }
+
+        Lexeme::Or => {
+            cursor.advance();
+
+            // Or comparison
+            if *cursor.current_lexeme() == Lexeme::Or {
+                cursor.advance();
+                return Some(Token::BinaryOperator(BinaryOperator::Or));
+            } else {
+                panic!("Expected '||', found '|'");
             }
         }
 
@@ -186,10 +300,10 @@ fn next_token(cursor: &mut LexemeCursor) -> Token {
 
             if *cursor.current_lexeme() == Lexeme::Equals {
                 cursor.advance();
-                return Token::BinaryOperator(BinaryOperator::AddAssign);
+                return Some(Token::BinaryOperator(BinaryOperator::AddAssign));
             }
 
-            Token::BinaryOperator(BinaryOperator::Add)
+            Some(Token::BinaryOperator(BinaryOperator::Add))
         }
 
         Lexeme::Minus => {
@@ -199,7 +313,7 @@ fn next_token(cursor: &mut LexemeCursor) -> Token {
                 // "-="
                 Lexeme::Equals => {
                     cursor.advance();
-                    return Token::BinaryOperator(BinaryOperator::SubtractAssign);
+                    return Some(Token::BinaryOperator(BinaryOperator::SubtractAssign));
                 }
 
                 // TODO: How to know if subtract or negate?
@@ -207,7 +321,7 @@ fn next_token(cursor: &mut LexemeCursor) -> Token {
                 _ => {}
             }
 
-            Token::UnaryOperator(UnaryOperator::Negate)
+            Some(Token::BinaryOperator(BinaryOperator::Subtract))
         }
 
         Lexeme::Not => {
@@ -216,12 +330,12 @@ fn next_token(cursor: &mut LexemeCursor) -> Token {
             // NotEqualTo comparison
             if *cursor.current_lexeme() == Lexeme::Equals {
                 cursor.advance();
-                return Token::BinaryOperator(BinaryOperator::NotEqualTo);
+                return Some(Token::BinaryOperator(BinaryOperator::NotEqualTo));
             }
 
 
             // Logical not
-            Token::UnaryOperator(UnaryOperator::Not)
+            Some(Token::UnaryOperator(UnaryOperator::Not))
         }
 
         Lexeme::Equals => {
@@ -230,11 +344,11 @@ fn next_token(cursor: &mut LexemeCursor) -> Token {
             // EqualTo comparison 
             if *cursor.current_lexeme() == Lexeme::Equals {
                 cursor.advance();
-                return Token::BinaryOperator(BinaryOperator::EqualTo);
+                return Some(Token::BinaryOperator(BinaryOperator::EqualTo));
             }
 
             // Assignment
-            Token::BinaryOperator(BinaryOperator::Assign)
+            Some(Token::BinaryOperator(BinaryOperator::Assign))
         }
 
         Lexeme::Slash => {
@@ -242,10 +356,10 @@ fn next_token(cursor: &mut LexemeCursor) -> Token {
 
             if *cursor.current_lexeme() == Lexeme::Equals {
                 cursor.advance();
-                return Token::BinaryOperator(BinaryOperator::DivideAssign);
+                return Some(Token::BinaryOperator(BinaryOperator::DivideAssign));
             }
 
-            Token::BinaryOperator(BinaryOperator::Divide)
+            Some(Token::BinaryOperator(BinaryOperator::Divide))
         }
 
         Lexeme::Star => {
@@ -253,39 +367,46 @@ fn next_token(cursor: &mut LexemeCursor) -> Token {
 
             if *cursor.current_lexeme() == Lexeme::Equals {
                 cursor.advance();
-                return Token::BinaryOperator(BinaryOperator::MultiplyAssign);
+                return Some(Token::BinaryOperator(BinaryOperator::MultiplyAssign));
             }
 
-            Token::BinaryOperator(BinaryOperator::Multiply)
+            Some(Token::BinaryOperator(BinaryOperator::Multiply))
         }
 
         Lexeme::Percent => {
             cursor.advance();
-            Token::BinaryOperator(BinaryOperator::Modulo)
+            Some(Token::BinaryOperator(BinaryOperator::Modulo))
         }
 
         Lexeme::Comma => {
             cursor.advance();
-            Token::Delimiter(Delimiter::Comma)
+            Some(Token::Delimiter(Delimiter::Comma))
         }
 
         Lexeme::Colon => {
             cursor.advance();
-            Token::Delimiter(Delimiter::Colon)
+            Some(Token::Delimiter(Delimiter::Colon))
         }
 
         Lexeme::Semicolon => {
             cursor.advance();
-            Token::Delimiter(Delimiter::Semicolon)
+            Some(Token::Delimiter(Delimiter::Semicolon))
+        }
+
+        Lexeme::EndOfStream => {
+            cursor.advance();
+
+            if !parenthesis_stack.is_empty() {
+                panic!("Unclosed parenthesis: {:?}", parenthesis_stack);
+            }
+
+            // End the iterator
+            None
         }
 
         // Unhandled or unimplemented
         x => {
-            // panic!("Unhandled lexeme. '{:?}'", x);
-
-            // FIXME: Remove this later
-            cursor.advance();
-            Token::Uknown
+            panic!("Unhandled lexeme: '{:?}'", x);
         }
     }
 }

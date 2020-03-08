@@ -51,10 +51,21 @@ pub enum Lexeme {
     Caret,              // "^"
     Percent,            // "%"
 
+    EndOfStream,        // Termination identifier
+
     Unknown,            // Invalid character
 }
 
-pub fn analyze_string(string: String) -> impl Iterator<Item = Lexeme> {
+pub fn analyze_string(string: String) -> Vec<Lexeme> {
+    let mut lexemes: Vec<Lexeme> = string_to_lexemes(string).collect();
+    strip(&mut lexemes);
+
+    lexemes.push(Lexeme::EndOfStream);
+
+    lexemes
+}
+
+fn string_to_lexemes(string: String) -> impl Iterator<Item = Lexeme> {
     use super::Cursor;
 
     let mut cursor = Cursor::from_string(string);
