@@ -10,43 +10,41 @@ Program -> (Scene | Function)+
 Scene -> Keyword::Scene Ident StatementBlock
 Function -> Keyword::Fn Ident ParameterList (Arrow Ident)? StatementBlock
 
-Parameters -> OpenParenthesis (Ident Colon Ident)* StatementBlock
+// TODO: Commas
+ParameterList -> OpenParenthesis (Ident Colon Ident)* StatementBlock
 
 StatementBlock -> OpenBrace (Statement | StatementBlock | Expression)* CloseBrace
 
 TODO: Statements
-Statement ->
+Statement -> Expression
+            | Semicolon
+            | Keyword::Let Ident (Colon Ident)? (Assign Expression)?
 
 TODO: Expressions
-Expression -> 
+Expression -> Literal
+            | IfExpr
+            | Expression BinaryOperator Expression
+            | OpenParenthesis Expression CloseParenthesis
 
-TODO: Boolean Expressions
-BooleanExpresion -> 
+// TODO: LHS and RHS of BooleanOperator could also be boolean expressions
+IfExpr -> Keyword::If ((Ident | Literal) BooleanOperator (Ident | Literal))+ (Keyword::Else Keyword::If?)?
+        | Keyword::If (Ident | Literal) (Keyword::Else Keyword::If?)?
 
 Keyword -> Let
          | If
+         | Else
          | Scene
          | Enum
          | Struct
 
-Literal -> Float | Int
+Literal -> Float | Int | Bool
 
-Delimiter -> Comma
-           | Colon
-           | Semicolon
-           | ParenthesisOpen
-           | ParenthesisClose
-           | BraceOpen
-           | BraceClose
-           | BracketOpen
-           | BracketClose
+BinaryAssignOperator -> AddAssign
+                      | SubtractAssign
+                      | DivideAssign
+                      | MultiplyAssign
 
-BinaryOperator -> Assign
-                | AddAssign
-                | SubtractAssign
-                | DivideAssign
-                | MultiplyAssign
-                | Add
+BinaryOperator -> Add
                 | Subtract
                 | Divide
                 | Multiply

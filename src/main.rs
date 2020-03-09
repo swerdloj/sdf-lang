@@ -19,7 +19,7 @@ fn main() {
     let input = std::fs::read_to_string(&env.input_path).expect("Failed to read input file");
     println!("{:?}", env);
 
-    // Transformations: String -> Lexemes -> Tokens
+    // String -> Lexemes -> Tokens
     let tokens: Vec<Token> = tokenize_string(input);
     print!("Tokens: {:#?}", tokens);
 }

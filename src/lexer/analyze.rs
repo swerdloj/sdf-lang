@@ -228,7 +228,6 @@ fn next_lexeme(cursor: &mut super::Cursor) -> Lexeme {
             } else if cursor.print_ahead(5) == "false" {
                 cursor.advance_by(5);
                 return LiteralValue(Literal::Bool(false));
-                
             }
             
             let from = cursor.current;
@@ -242,7 +241,7 @@ fn next_lexeme(cursor: &mut super::Cursor) -> Lexeme {
             Identifier(cursor.string[from..cursor.current].to_owned())
         }
 
-        // Find whitespace and condence to a single Whitespace lexeme
+        // Find whitespace and condense to a single Whitespace lexeme
         '\r'
         | '\n'
         | ' '

@@ -16,6 +16,7 @@ pub enum Token {
 pub enum Keyword {
     Let,    // "let"
     If,     // "if"
+    Else,   // "else"
     Scene,  // "scene"
     Enum,   // "enum"
     Struct, // "struct"
@@ -107,6 +108,7 @@ impl LexemeCursor {
     pub fn current_lexeme(&self) -> &Lexeme {
         &self.lexemes[self.current]
     }
+
 }
 
 pub fn tokenize_string(input: String) -> Vec<Token> {
@@ -140,6 +142,11 @@ fn next_token(cursor: &mut LexemeCursor, parenthesis_stack: &mut Vec<Lexeme>) ->
                 "if" => {
                     cursor.advance();
                     Some(Token::Keyword(Keyword::If))
+                }
+
+                "else" => {
+                    cursor.advance();
+                    Some(Token::Keyword(Keyword::Else))
                 }
 
                 "enum" => {
