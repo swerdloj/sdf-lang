@@ -1,7 +1,7 @@
 // 0 - Input -> Environment/Text
 // 1 - Analyze(Text) -> Lexemes
 // 2 - Lexer(Lexemes) -> Tokens
-// 3 - Parser(Tokens) -> ?? AST?
+// 3 - Parser(Tokens) -> ?? (AST?)
 // 4 - ?? -> GLSL
 
 

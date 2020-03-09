@@ -27,6 +27,7 @@ pub enum Keyword {
 pub enum Literal {
     Float(String),
     Int(String),
+    Bool(bool),
 }
 
 // #[derive(Debug)]
@@ -67,13 +68,13 @@ pub enum BinaryOperator {
     Multiply,               // "a * b"
     Modulo,                 // "a % b"
 
+    // Boolean operators
     GreaterThan,            // "a > b"
     LessThan,               // "a < b"
     GreaterThanOrEqualTo,   // "a >= b"
     LessThanOrEqualTo,      // "a <= b"
     EqualTo,                // "a == b"
     NotEqualTo,             // "a != b"
-
     And,                    // "a && b"
     Or,                     // "a || b"
 }
@@ -175,10 +176,10 @@ fn next_token(cursor: &mut LexemeCursor, parenthesis_stack: &mut Vec<Lexeme>) ->
         
         Lexeme::ParenthesisClose => {
             cursor.advance();
-            let kind = parenthesis_stack.pop().expect("Closing parenthesis has no mathing opener");
+            let kind = parenthesis_stack.pop().expect("Closing parenthesis has no matching opener");
 
             if kind != Lexeme::ParenthesisOpen {
-                panic!("Expected '{:?}', found ')'", kind);
+                panic!("Expected '{}', found ')'", kind.opposite_delimiter());
             }
 
             Some(Token::Delimiter(Delimiter::ParenthesisClose))
@@ -196,7 +197,7 @@ fn next_token(cursor: &mut LexemeCursor, parenthesis_stack: &mut Vec<Lexeme>) ->
             let kind = parenthesis_stack.pop().expect("Closing brace has no mathing opener");
 
             if kind != Lexeme::BraceOpen {
-                panic!("Expected '{:?}', found '}}'", kind);
+                panic!("Expected '{}', found '}}'", kind.opposite_delimiter());
             }
 
             Some(Token::Delimiter(Delimiter::BraceClose))
@@ -214,7 +215,7 @@ fn next_token(cursor: &mut LexemeCursor, parenthesis_stack: &mut Vec<Lexeme>) ->
             let kind = parenthesis_stack.pop().expect("Closing bracket has no mathing opener");
 
             if kind != Lexeme::BracketOpen {
-                panic!("Expected '{:?}', found ']'", kind);
+                panic!("Expected '{}', found ']'", kind.opposite_delimiter());
             }
 
             Some(Token::Delimiter(Delimiter::BracketClose))
@@ -229,6 +230,10 @@ fn next_token(cursor: &mut LexemeCursor, parenthesis_stack: &mut Vec<Lexeme>) ->
                 
                 super::analyze::Literal::Int(number) => {
                     Token::Literal(Literal::Int(number.clone()))
+                }
+
+                super::analyze::Literal::Bool(value) => {
+                    Token::Literal(Literal::Bool(*value))
                 }
             };
 
@@ -406,7 +411,7 @@ fn next_token(cursor: &mut LexemeCursor, parenthesis_stack: &mut Vec<Lexeme>) ->
 
         // Unhandled or unimplemented
         x => {
-            panic!("Unhandled lexeme: '{:?}'", x);
+            panic!("Unhandled lexeme: '{}'", x);
         }
     }
 }

@@ -71,6 +71,10 @@ impl Cursor {
         &self.string[self.current..]
     }
 
+    pub fn print_ahead(&self, ahead: usize) -> &str {
+        &self.string[self.current..self.current+ahead]
+    }
+
     /// Returns the substring from the given position to the end of the string
     pub fn print_from(&self, from: usize) -> &str {
         &self.string[from..]

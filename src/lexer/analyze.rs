@@ -6,6 +6,7 @@
 pub enum Literal {
     Int(String),        // Numbers without decimals
     Float(String),      // Numbers with decimals
+    Bool(bool),         // "true" or "false"
     // Str,             // NOTE: sdf-lang does not allow strings, chracters, etc. -> Maybe in the future for debugging
 }
 
@@ -54,6 +55,81 @@ pub enum Lexeme {
     EndOfStream,        // Termination identifier
 
     Unknown,            // Invalid character
+}
+
+impl Lexeme {
+    pub fn opposite_delimiter(&self) -> Lexeme {
+        use Lexeme::*;
+
+        match self {
+            ParenthesisOpen => ParenthesisClose,
+            ParenthesisClose => ParenthesisOpen,
+            BraceOpen => BraceClose,
+            BraceClose => BraceOpen,
+            BracketOpen => BracketClose,
+            BracketClose => BraceOpen,
+            x => {
+                panic!("Cannot reverse '{:?}'", x);
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for Lexeme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Lexeme::*;
+
+        let symbol: String = match self {
+            CommentSingle => "//".to_owned(),
+            CommentMulti => "/**/".to_owned(),
+            Whitespace => "WHITESPACE".to_owned(),
+            LiteralValue(literal) => {
+                match literal {
+                    Literal::Int(value) => {
+                        format!("Literal: Integer({})", value)
+                    }
+                    Literal::Float(value) => {
+                        format!("Literal: Float({})", value)
+                    }
+                    Literal::Bool(value) => {
+                        format!("Literal: Bool({})", value)
+                    }
+                }
+            }
+            Identifier(id) => {
+                format!("Identifier: {}", id)
+            }
+            Equals => "=".to_owned(),
+            Colon => ":".to_owned(),
+            Comma => ",".to_owned(),
+            Semicolon => ";".to_owned(),
+            Dot => ".".to_owned(),
+            ParenthesisOpen => "(".to_owned(),
+            ParenthesisClose => ")".to_owned(),
+            BraceOpen => "{".to_owned(),
+            BraceClose => "}".to_owned(),
+            BracketOpen => "[".to_owned(),
+            BracketClose => "]".to_owned(),
+            At => "@".to_owned(),
+            Star => "*".to_owned(),
+            Plus => "+".to_owned(),
+            Minus => "-".to_owned(),
+            Slash => "/".to_owned(),
+            Not => "!".to_owned(),
+            And => "&".to_owned(),
+            Or => "|".to_owned(),
+            Tilde => "~".to_owned(),
+            LessThan => "<".to_owned(),
+            GreaterThan => ">".to_owned(),
+            Caret => "^".to_owned(),
+            Percent => "%".to_owned(),
+            EndOfStream => "END".to_owned(),
+
+            _ => "ERROR".to_owned()
+        };
+
+        write!(f, "{}", symbol)
+    }
 }
 
 pub fn analyze_string(string: String) -> Vec<Lexeme> {
@@ -145,9 +221,19 @@ fn next_lexeme(cursor: &mut super::Cursor) -> Lexeme {
         /* FIXME: Why doesn't this binding work? Gives Unknown
         c @ '_' |                   */
         c if (c.is_ascii_alphabetic() || c == '_') => {
+            // Check if boolean
+            if cursor.print_ahead(4) == "true" {
+                cursor.advance_by(4);
+                return LiteralValue(Literal::Bool(true));
+            } else if cursor.print_ahead(5) == "false" {
+                cursor.advance_by(5);
+                return LiteralValue(Literal::Bool(false));
+                
+            }
+            
             let from = cursor.current;
-
             let mut current = cursor.current_character();
+
             while current.is_ascii_alphanumeric() || current == '_' {
                 cursor.advance();
                 current = cursor.current_character();

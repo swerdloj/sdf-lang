@@ -32,4 +32,7 @@ scene main {
         height: 1,
         position: vec3{0, 0, 0},
     };
+
+    true
+    false
 }
