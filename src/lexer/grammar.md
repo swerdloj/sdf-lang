@@ -7,35 +7,29 @@
 
 Program -> (Scene | Function)+
 
-Scene -> Keyword::Scene Ident StatementBlock
-Function -> Keyword::Fn Ident ParameterList (Arrow Ident)? StatementBlock
+Scene -> Scene Ident StatementBlock
+Function -> Fn Ident ParameterList (Arrow Ident)? StatementBlock
 
-// TODO: Commas
-ParameterList -> OpenParenthesis (Ident Colon Ident)* StatementBlock
+TODO: Fix commas
+ParameterList -> OpenParenthesis (Ident Colon Ident Comma?)* StatementBlock
 
 StatementBlock -> OpenBrace (Statement | StatementBlock | Expression)* CloseBrace
 
-TODO: Statements
+TODO: Constructors?
 Statement -> Expression
+            | Let Ident (Colon Ident)? (Assign Expression)?
             | Semicolon
-            | Keyword::Let Ident (Colon Ident)? (Assign Expression)?
 
-TODO: Expressions
+TODO: Dot operator?
 Expression -> Literal
             | IfExpr
-            | Expression BinaryOperator Expression
+            | UnaryOperator Expression
+            | Expression (BinaryOperator | BinaryAssign) Expression
             | OpenParenthesis Expression CloseParenthesis
 
-// TODO: LHS and RHS of BooleanOperator could also be boolean expressions
-IfExpr -> Keyword::If ((Ident | Literal) BooleanOperator (Ident | Literal))+ (Keyword::Else Keyword::If?)?
-        | Keyword::If (Ident | Literal) (Keyword::Else Keyword::If?)?
+IfExpr -> If (BoolExpr | Ident | Literal) (Else If?)?
 
-Keyword -> Let
-         | If
-         | Else
-         | Scene
-         | Enum
-         | Struct
+BoolExpr -> (Ident | Literal | BoolExpr) BooleanOperator (Ident | Literal | BoolExpr)
 
 Literal -> Float | Int | Bool
 
