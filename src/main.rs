@@ -4,13 +4,13 @@
 // 3 - Parser(Tokens) -> ?? (AST?)
 // 4 - ?? -> GLSL
 
-
 mod environment;
+mod parse;
 
 #[allow(unused)]
-mod lexer;
+mod lex;
 
-use lexer::tokenize::{Token, tokenize_string};
+use lex::tokenize::{Token, tokenize_string};
 
 fn main() {
     let env = environment::Environment::get();
