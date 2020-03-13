@@ -1,38 +1,106 @@
 use crate::parse::ast;
 
-// grammar<'input, 'ast>(input: &'input TokenStream);
 grammar;
 
-// pub AST: ast::AST = {
-//     Scene => <>,
-//     Function => <>,
-// }
+// ---------------- AST ----------------
 
-pub Statement: ast::Statement = {
-    "let" <id:Ident> <ty: (":" Ident)?> "=" <expr:Expression> ";" => ast::Statement::Let {
-        Ident: id.to_owned(),
-        Type: ty.map(|t| t.1),
-        Expression: Some(expr),
+// TODO: This
+pub AST: ast::AST = {
+    <functions:Function*> <scenes:Scene*> => ast::AST::Scene{
+        name: "TODO".to_owned(), statements: Vec::new()
     },
 }
+
+pub Scene: ast::AST = {
+    "scene" <name:Ident> <s:StatementBlock> => ast::AST::Scene{name: name, statements: s},
+}
+
+pub Function: ast::AST = {
+    "fn" <name:Ident> <params:FunctionParams> <return_type:("->" <Ident>)?> <s:StatementBlock> 
+    => ast::AST::Function {
+        parameters: params,
+        return_type,
+        statements: s,
+    }
+}
+
+#[inline]
+FunctionParams: Vec<(String, String)> = {
+    "(" <multi:(<Ident> ":" <Ident> ",")*> <single:(<Ident> ":" <Ident>)?> ")" => {
+        let mut params = multi;
+        
+        if let Some(param) = single {
+            params.push(param);
+        }
+
+        params
+    }
+}
+
+// ---------------- STATEMENTS ----------------
+
+pub Statement: ast::Statement = {
+    LetStatement => <>,
+}
+
+StatementBlock: Vec<ast::Statement> = {
+    "{" <statements:(Statement)*> "}" => {
+        statements
+    }
+}
+    
+// FIXME: Separating out `Constructor` as "Ident { ConstructorArgs }" causes ambiguities
+LetStatement: ast::Statement = {
+    // TODO: Allow non-assigning declarations
+    // let x = 7;
+    "let" <id:Ident> <ty: (":" <Ident>)?> "=" <expr:Expression> ";" => ast::Statement::Let {
+        ident: id.to_owned(),
+        ty,
+        expression: Some(expr),
+    },
+
+    // let identifier: type { param1: value1, param2: value2, ...};
+    "let" <id:Ident> ":" <ty:Ident> "{" <fields:(ConstructorArgs)> "}" ";" => ast::Statement::LetConstructor {
+        ident: id.to_owned(),
+        constructor: ast::Constructor {
+            ty: ty,
+            fields,
+        },
+    }
+}
+
+// TODO: Allow final argument to have optional comma
+ConstructorArgs: Vec<(String, ast::Expression)> = {
+    <pair:(<Ident> ":" <Expression> ",")*> => pair,
+}
+
+// ---------------- EXPRESSIONS ----------------
 
 Expression: ast::Expression = {
     Literal => ast::Expression::Literal(<>),
+    Ident => ast::Expression::Identifier(<>),
     // BinaryExpression => <>,
 }
 
+// TODO: Add precedence and associativity to remove the local ambiguity here
 BinaryExpression: ast::Expression = {
     <l:Expression> <op:BinaryOperator> <r:Expression> => ast::Expression::Binary {
-        LHS: Box::new(l),
-        Operator: op,
-        RHS: Box::new(r),
+        lhs: Box::new(l),
+        operator: op,
+        rhs: Box::new(r),
     },
+}
+
+AssignmentOperator: ast::AssignmentOperator = {
+    "=" => ast::AssignmentOperator::Assign,
 }
 
 BinaryOperator: ast::BinaryOperator = {
     "+" => ast::BinaryOperator::Plus,
     "-" => ast::BinaryOperator::Minus,
 }
+
+// ---------------- IDENTIFIERS/LITERALS ----------------
 
 // Do not allow "true" or "false" as identifiers. Make them literals.
 match {

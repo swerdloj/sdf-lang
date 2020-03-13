@@ -3,25 +3,32 @@
 /// AST root node
 #[derive(Debug)]
 pub enum AST {
-    Function,
-    Scene,
-}
-
-#[derive(Debug)]
-pub enum Node {
-    // StatementBlock(Vec<Node>),
-    Statement,
-    Expression,
+    Function {
+        parameters: Vec<(String, String)>,
+        return_type: Option<String>,
+        statements: Vec<Statement>,
+    },
+    Scene {
+        name: String,
+        statements: Vec<Statement>,
+    },
 }
 
 #[derive(Debug)]
 pub enum Expression {
     Literal(Literal),
+    Identifier(String),
     Binary {
-        LHS: Box<Expression>,
-        Operator: BinaryOperator,
-        RHS: Box<Expression>,
-    }
+        lhs: Box<Expression>,
+        operator: BinaryOperator,
+        rhs: Box<Expression>,
+    },
+}
+
+#[derive(Debug)]
+pub struct Constructor {
+    pub ty: String,
+    pub fields: Vec<(String, Expression)>,
 }
 
 #[derive(Debug)]
@@ -30,15 +37,22 @@ pub enum BinaryOperator {
     Minus,
 }
 
+pub enum AssignmentOperator {
+    Assign,
+}
+
 #[derive(Debug)]
 pub enum Statement {
     Let {
-        Ident: String,
-        Type: Option<String>,
-        Expression: Option<Expression>,
-    }
+        ident: String,
+        ty: Option<String>,
+        expression: Option<Expression>,
+    },
+    LetConstructor {
+        ident: String,
+        constructor: Constructor,
+    },
 }
-
 
 #[derive(Debug)]
 /// GLSL Types
