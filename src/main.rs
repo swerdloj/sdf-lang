@@ -4,13 +4,15 @@
 // 3 - Parser(Tokens) -> ?? (AST?)
 // 4 - ?? -> GLSL
 
+#[macro_use]
+extern crate lalrpop_util;
+
 mod environment;
 mod parse;
 
 #[allow(unused)]
 mod lex;
 
-use lex::tokenize::{Token, tokenize_string};
 
 fn main() {
     let env = environment::Environment::get();
@@ -19,7 +21,7 @@ fn main() {
     let input = std::fs::read_to_string(&env.input_path).expect("Failed to read input file");
     println!("{:?}", env);
 
-    // String -> Lexemes -> Tokens
-    let tokens: Vec<Token> = tokenize_string(input);
-    print!("Tokens: {:#?}", tokens);
+    let ast = parse::parser::StatementParser::new().parse("let x = 1;");
+
+    println!("{:#?}", ast);
 }

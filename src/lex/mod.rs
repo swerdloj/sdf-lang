@@ -2,6 +2,10 @@ pub mod analyze;
 pub mod tokenize;
 
 
+pub enum LexError {
+
+}
+
 struct Cursor {
     string: String,
     current: usize,

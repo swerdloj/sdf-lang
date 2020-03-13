@@ -88,6 +88,31 @@ pub enum UnaryOperator {
     // TODO: Reference could be translated as `inout` in GLSL, etc.
 }
 
+pub struct TokenStream {
+    cursor: LexemeCursor,
+    open_parenthesis_stack: Vec<Lexeme>,
+}
+
+impl TokenStream {
+    pub fn from_string(input: String) -> Self {
+        TokenStream {
+            cursor: LexemeCursor {
+                lexemes: super::analyze::analyze_string(input),
+                current: 0,
+            },
+            open_parenthesis_stack: Vec::new(),
+        }
+    }
+}
+
+impl Iterator for TokenStream {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        next_token(&mut self.cursor, &mut self.open_parenthesis_stack)
+    }
+}
+
 struct LexemeCursor {
     lexemes: Vec<Lexeme>,
     current: usize,

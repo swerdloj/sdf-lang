@@ -1,0 +1,52 @@
+use crate::parse::ast;
+
+// grammar<'input, 'ast>(input: &'input TokenStream);
+grammar;
+
+// pub AST: ast::AST = {
+//     Scene => <>,
+//     Function => <>,
+// }
+
+pub Statement: ast::Statement = {
+    "let" <id:Ident> <ty: (":" Ident)?> "=" <expr:Expression> ";" => ast::Statement::Let {
+        Ident: id.to_owned(),
+        Type: ty.map(|t| t.1),
+        Expression: Some(expr),
+    },
+}
+
+Expression: ast::Expression = {
+    Literal => ast::Expression::Literal(<>),
+    // BinaryExpression => <>,
+}
+
+BinaryExpression: ast::Expression = {
+    <l:Expression> <op:BinaryOperator> <r:Expression> => ast::Expression::Binary {
+        LHS: Box::new(l),
+        Operator: op,
+        RHS: Box::new(r),
+    },
+}
+
+BinaryOperator: ast::BinaryOperator = {
+    "+" => ast::BinaryOperator::Plus,
+    "-" => ast::BinaryOperator::Minus,
+}
+
+// Do not allow "true" or "false" as identifiers. Make them literals.
+match {
+    r"(true)|(false)" => BOOL,
+} else {
+    _
+}
+
+Ident: String = {
+    <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => <>.to_owned(),
+}
+
+Literal: ast::Literal = {
+    <uint:r"[0-9]+"> => ast::Literal::UInt(uint.parse::<u32>().unwrap()),
+    <float:r"[0-9]+[.][0-9]*"> => ast::Literal::Float(float.parse::<f32>().unwrap()),
+    <boolean:BOOL> => ast::Literal::Bool(boolean.parse::<bool>().unwrap()),
+}
