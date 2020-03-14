@@ -1,8 +1,10 @@
-// AST stuff
+// AST enums, types, and structs
 
-/// AST root node
+/// AST root
+pub type AST = Vec<Item>;
+
 #[derive(Debug)]
-pub enum AST {
+pub enum Item {
     Function {
         parameters: Vec<(String, String)>,
         return_type: Option<String>,
@@ -12,6 +14,12 @@ pub enum AST {
         name: String,
         statements: Vec<Statement>,
     },
+    Struct {
+        name: String,
+        // TODO: What would be valid defaults? Expression seems to broad.
+        // field: type = optional_default,
+        fields: Vec<(String, String, Option<Expression>)>,
+    }
 }
 
 #[derive(Debug)]
@@ -32,13 +40,31 @@ pub struct Constructor {
 }
 
 #[derive(Debug)]
+pub enum BooleanOperator {
+    EqualTo,
+    GreaterThan,
+    LessThan,
+    GreaterThanOrEqualTo,
+    LessThanOrEqualTo,
+    And,
+    Or,
+}
+
+#[derive(Debug)]
 pub enum BinaryOperator {
     Plus,
     Minus,
+    Multiply,
+    Divide,
 }
 
+#[derive(Debug)]
 pub enum AssignmentOperator {
     Assign,
+    AddAssign,
+    SubtractAssign,
+    MultiplyAssign,
+    DivideAssign,
 }
 
 #[derive(Debug)]
@@ -52,6 +78,7 @@ pub enum Statement {
         ident: String,
         constructor: Constructor,
     },
+    Expression(Expression),
 }
 
 #[derive(Debug)]

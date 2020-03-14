@@ -1,3 +1,5 @@
-set flag=%1
+set cargoflags=%1
 
-cargo run %flag% -- --input tests/simple.sdf --output tests/simple.glsl
+cargo run %cargoflags% -- --input tests/simple.sdf --output tests/simple.glsl --AST
+
+type output\ast.txt

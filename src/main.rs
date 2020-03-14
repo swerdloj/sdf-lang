@@ -14,79 +14,25 @@ mod parse;
 mod lex;
 
 
+use std::fs;
+use std::io::prelude::Write;
+
 fn main() {
     let env = environment::Environment::get();
 
     // Note that file's existence will be checked already
-    let input = std::fs::read_to_string(&env.input_path).expect("Failed to read input file");
-    println!("ENVIRONMENT:\n{:#?}", env);
+    let input = fs::read_to_string(&env.input_path).expect("Failed to read input file");
+    println!("---ENVIRONMENT---\n{:#?}\n\n", env);
 
     // TODO: What about comments? Should they just be stripped before parsing?
-    let ast = parse::parser::StatementParser::new().parse(&input);
-    println!("AST:\n{:#?}", ast);
+    let ast = parse::parser::ASTParser::new().parse(&input);
+
+    // Write the AST to a file
+    if env.save_ast {
+        fs::create_dir("output/");
+        let mut file = fs::File::create("output/ast.txt").unwrap();
+        file.write_fmt(format_args!("{:#?}", &ast));
+    }
 
     // TODO: ast -> template -> output GLSL
-}
-
-
-mod parser_test {
-    use crate::parse::parser;
-
-    #[test]
-    fn let_statement() {
-        let ast = parser::StatementParser::new().parse("
-            let x = 1;
-        ");
-        
-        println!("{:#?}", ast.unwrap());
-    }
-
-    #[test]
-    fn let_constructor() {
-        let ast = parser::StatementParser::new().parse("
-            let x: y { 
-                f1: 1, 
-                f2: 2,
-            };
-        ");
-        
-        println!("{:#?}", ast.unwrap());
-    }
-
-    #[test]
-    fn scene_with_constructor() {
-        let ast = parser::SceneParser::new().parse("
-            scene main {
-                let x = 7;
-                
-                let cube: Box {
-                    field_name: x,
-                };
-            }
-        ");
-        
-        println!("{:#?}", ast.unwrap());
-    }
-
-    #[test]
-    fn function_with_params_and_return_type() {
-        let ast = parser::FunctionParser::new().parse("
-            fn name(param1: type1, param2: type2) -> return_type {
-                let x = 12;
-            }
-        ");
-        
-        println!("{:#?}", ast.unwrap());
-    }
-
-    #[test]
-    fn void_function_no_params() {
-        let ast = parser::FunctionParser::new().parse("
-            fn name() {
-                let x = 12;
-            }
-        ");
-        
-        println!("{:#?}", ast.unwrap());
-    }
 }

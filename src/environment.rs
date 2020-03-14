@@ -5,7 +5,7 @@ use std::path::PathBuf;
 pub struct Environment {
     pub input_path: PathBuf,
     pub output_path: PathBuf,
-    // ...
+    pub save_ast: bool,
 }
 
 impl Environment {
@@ -13,6 +13,7 @@ impl Environment {
         use std::process::exit;
 
         // All arguments with associated indices
+        // Note that arg[0] is executable's path
         let args: Vec<String> = std::env::args().collect();
 
         if args.len() == 1 {
@@ -20,8 +21,10 @@ impl Environment {
             exit(0);
         }
 
+        // DEFAULTS
         let mut input: Option<PathBuf> = None;
         let mut output: Option<PathBuf> = None;
+        let mut save_ast = false;
 
         let mut index = 1;
         let num_args = args.len();
@@ -32,7 +35,9 @@ impl Environment {
                              "sdf-lang compiler usage:\n
                               --help\t\tDisplay this message\n
                               --input PATH\tSpecify the input file path\n
-                              --output PATH\tSpecify the output file path"
+                              --output PATH\tSpecify the output file path. Only specify the file to store in /output/FILE\n
+                              --AST\t\tSave the AST to text file in output directory
+                              "
                             );
                     exit(0);
                 }
@@ -49,6 +54,7 @@ impl Environment {
                             input = Some(p);
                         } else {
                             println!("Error: No such input file exists");
+                            exit(0);
                         }
                     } else {
                         println!("Error: No input path specified");
@@ -83,6 +89,10 @@ impl Environment {
                     index += 1;
                 }
 
+                "--AST" => {
+                    save_ast = true;
+                }
+
                 // Unknown
                 x => {
                     println!("Error: Unknown argument '{}'. Run with '--help' to see proper usage.", x);
@@ -110,6 +120,7 @@ impl Environment {
         Environment {
             input_path: input.unwrap(),
             output_path: output.unwrap(),
+            save_ast,
         }
     }
 }

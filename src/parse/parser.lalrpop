@@ -4,24 +4,33 @@ grammar;
 
 // ---------------- AST ----------------
 
-// TODO: This
+// This is the root of the AST (initial grammar symbol)
 pub AST: ast::AST = {
-    <functions:Function*> <scenes:Scene*> => ast::AST::Scene{
-        name: "TODO".to_owned(), statements: Vec::new()
-    },
+    Item* => <>,
 }
 
-pub Scene: ast::AST = {
-    "scene" <name:Ident> <s:StatementBlock> => ast::AST::Scene{name: name, statements: s},
+// An AST is composed of Items
+pub Item: ast::Item = {
+    Function => <>,
+    Scene => <>,
+    Struct => <>,
 }
 
-pub Function: ast::AST = {
+// ---------------- SCENE ----------------
+
+pub Scene: ast::Item = {
+    "scene" <name:Ident> <s:StatementBlock> => ast::Item::Scene{name: name, statements: s},
+}
+
+// ---------------- FUNCTION ----------------
+
+pub Function: ast::Item = {
     "fn" <name:Ident> <params:FunctionParams> <return_type:("->" <Ident>)?> <s:StatementBlock> 
-    => ast::AST::Function {
+    => ast::Item::Function {
         parameters: params,
         return_type,
         statements: s,
-    }
+    },
 }
 
 #[inline]
@@ -34,19 +43,36 @@ FunctionParams: Vec<(String, String)> = {
         }
 
         params
-    }
+    },
 }
 
-// ---------------- STATEMENTS ----------------
+// ---------------- STRUCT ----------------
+
+Struct: ast::Item = {
+    "struct" <id:Ident> "{" <fields:(StructField)+> "}" => ast::Item::Struct {
+        name: id,
+        fields,
+    },
+}
+
+// TODO: What would be valid defaults?
+// TODO: Make final comma optional
+#[inline]
+StructField: (String, String, Option<ast::Expression>) = {
+    <id:Ident> ":" <ty:Ident> <def:("=" <Expression>)?> "," => (id, ty, def),
+}
+
+// ---------------- STATEMENT ----------------
 
 pub Statement: ast::Statement = {
     LetStatement => <>,
+    <Expression> ";" => ast::Statement::Expression(<>),
 }
 
 StatementBlock: Vec<ast::Statement> = {
     "{" <statements:(Statement)*> "}" => {
         statements
-    }
+    },
 }
     
 // FIXME: Separating out `Constructor` as "Ident { ConstructorArgs }" causes ambiguities
@@ -66,15 +92,15 @@ LetStatement: ast::Statement = {
             ty: ty,
             fields,
         },
-    }
+    },
 }
 
-// TODO: Allow final argument to have optional comma
+// TODO: Make final comma optional
 ConstructorArgs: Vec<(String, ast::Expression)> = {
     <pair:(<Ident> ":" <Expression> ",")*> => pair,
 }
 
-// ---------------- EXPRESSIONS ----------------
+// ---------------- EXPRESSION ----------------
 
 Expression: ast::Expression = {
     Literal => ast::Expression::Literal(<>),
@@ -100,7 +126,7 @@ BinaryOperator: ast::BinaryOperator = {
     "-" => ast::BinaryOperator::Minus,
 }
 
-// ---------------- IDENTIFIERS/LITERALS ----------------
+// ---------------- IDENTIFIER & LITERAL ----------------
 
 // Do not allow "true" or "false" as identifiers. Make them literals.
 match {
