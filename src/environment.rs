@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::fs;
+use std::io::prelude::Write;
+
 
 // TODO: Find better name
 #[derive(Debug)]
@@ -9,6 +12,19 @@ pub struct Environment {
 }
 
 impl Environment {
+    pub fn save_ast(&self, ast: &crate::parse::ast::AST) -> Result<(), std::io::Error> {
+        let output_path = Path::new("./output");
+
+        if !output_path.exists() {
+            fs::create_dir(output_path)?;
+        }
+
+        let mut file = fs::File::create(output_path.join("ast.txt"))?;
+        file.write_fmt(format_args!("{:#?}", &ast))?;
+
+        Ok(())
+    }
+
     pub fn get() -> Self {
         use std::process::exit;
 

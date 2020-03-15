@@ -7,7 +7,33 @@ mod parser_test {
     use crate::parse::parser;
 
     #[test]
-    fn ast_root() {
+    fn comments() {
+        let ast = parser::ASTParser::new().parse("
+            /*
+            struct commented_out {
+                field1: value1 = default,
+                field2: no_default,
+            }
+            stuff in comment here
+            */
+
+            // Comment here
+
+            scene main {
+                let box: Box {
+                    field1: value1,
+                    field2: value2,
+                };
+                let x = 7;
+                let y = x; // Another comment
+            }
+        ");
+        
+        println!("{:#?}", ast.unwrap());
+    }
+
+    #[test]
+    fn ast_root_with_struct_with_function_with_scene_with_constructor() {
         let ast = parser::ASTParser::new().parse("
             struct something {
                 field1: value1 = default,
@@ -56,45 +82,6 @@ mod parser_test {
                 f1: 1, 
                 f2: 2,
             };
-        ");
-        
-        println!("{:#?}", ast.unwrap());
-    }
-
-    #[test]
-    fn scene_with_constructor() {
-        let ast = parser::SceneParser::new().parse("
-            scene main {
-                let x = 7;
-                
-                let cube: Box {
-                    field_name: x,
-                };
-
-                let y = 4;
-            }
-        ");
-        
-        println!("{:#?}", ast.unwrap());
-    }
-
-    #[test]
-    fn function_with_params_and_return_type() {
-        let ast = parser::FunctionParser::new().parse("
-            fn name(param1: type1, param2: type2) -> return_type {
-                let x = 12;
-            }
-        ");
-        
-        println!("{:#?}", ast.unwrap());
-    }
-
-    #[test]
-    fn void_function_no_params() {
-        let ast = parser::FunctionParser::new().parse("
-            fn name() {
-                let x = 12;
-            }
         ");
         
         println!("{:#?}", ast.unwrap());

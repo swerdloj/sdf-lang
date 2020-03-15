@@ -2,6 +2,22 @@ use crate::parse::ast;
 
 grammar;
 
+
+match {
+    // Do not allow "true" or "false" as identifiers. Make them literals.
+    r"(true)|(false)" => BOOL,
+    // Ignore comments
+    // from https://github.com/lalrpop/lalrpop/pull/509/commits/ee2f7060e99f902620ac4edeea5cfe3c3551f09c)
+    r"\s*" => { },
+    r"//[^\n\r]*[\n\r]*" => { },
+    // TODO: Look at this regex; it may do more than I want 
+    // TODO: Inline comments don't work
+    r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
+} else {
+    _
+}
+
+
 // ---------------- AST ----------------
 
 // This is the root of the AST (initial grammar symbol)
@@ -10,7 +26,7 @@ pub AST: ast::AST = {
 }
 
 // An AST is composed of Items
-pub Item: ast::Item = {
+Item: ast::Item = {
     Function => <>,
     Scene => <>,
     Struct => <>,
@@ -18,13 +34,13 @@ pub Item: ast::Item = {
 
 // ---------------- SCENE ----------------
 
-pub Scene: ast::Item = {
+Scene: ast::Item = {
     "scene" <name:Ident> <s:StatementBlock> => ast::Item::Scene{name: name, statements: s},
 }
 
 // ---------------- FUNCTION ----------------
 
-pub Function: ast::Item = {
+Function: ast::Item = {
     "fn" <name:Ident> <params:FunctionParams> <return_type:("->" <Ident>)?> <s:StatementBlock> 
     => ast::Item::Function {
         parameters: params,
@@ -127,13 +143,6 @@ BinaryOperator: ast::BinaryOperator = {
 }
 
 // ---------------- IDENTIFIER & LITERAL ----------------
-
-// Do not allow "true" or "false" as identifiers. Make them literals.
-match {
-    r"(true)|(false)" => BOOL,
-} else {
-    _
-}
 
 Ident: String = {
     <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => <>.to_owned(),

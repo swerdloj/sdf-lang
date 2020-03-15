@@ -14,14 +14,11 @@ mod parse;
 mod lex;
 
 
-use std::fs;
-use std::io::prelude::Write;
-
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let env = environment::Environment::get();
 
     // Note that file's existence will be checked already
-    let input = fs::read_to_string(&env.input_path).expect("Failed to read input file");
+    let input = std::fs::read_to_string(&env.input_path)?;
     println!("---ENVIRONMENT---\n{:#?}\n\n", env);
 
     // TODO: What about comments? Should they just be stripped before parsing?
@@ -29,10 +26,10 @@ fn main() {
 
     // Write the AST to a file
     if env.save_ast {
-        fs::create_dir("output/");
-        let mut file = fs::File::create("output/ast.txt").unwrap();
-        file.write_fmt(format_args!("{:#?}", &ast));
+        env.save_ast(&ast.expect("Parse error"))?;
     }
 
     // TODO: ast -> template -> output GLSL
+
+    Ok(())
 }
