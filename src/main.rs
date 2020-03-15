@@ -19,10 +19,12 @@ fn main() -> Result<(), std::io::Error> {
 
     // Note that file's existence will be checked already
     let input = std::fs::read_to_string(&env.input_path)?;
-    println!("---ENVIRONMENT---\n{:#?}\n\n", env);
+    println!("{:#?}\n\n", env);
 
-    // TODO: What about comments? Should they just be stripped before parsing?
-    let ast = parse::parser::ASTParser::new().parse(&input);
+    let ast = parse::parse(&input).map_err(|e| {
+        println!("Parse Error: {}", e);
+        std::process::exit(0);
+    });
 
     // Write the AST to a file
     if env.save_ast {

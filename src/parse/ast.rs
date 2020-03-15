@@ -31,7 +31,13 @@ pub enum Expression {
         operator: BinaryOperator,
         rhs: Box<Expression>,
     },
+    Unary {
+        operator: UnaryOperator,
+        rhs: Box<Expression>,
+    },
+    __Temporary,
 }
+
 
 #[derive(Debug)]
 pub struct Constructor {
@@ -40,8 +46,15 @@ pub struct Constructor {
 }
 
 #[derive(Debug)]
-pub enum BooleanOperator {
+pub enum BinaryOperator {
+    Plus,
+    Minus,
+
+    Multiply,
+    Divide,
+
     EqualTo,
+    NotEqualTo,
     GreaterThan,
     LessThan,
     GreaterThanOrEqualTo,
@@ -51,11 +64,9 @@ pub enum BooleanOperator {
 }
 
 #[derive(Debug)]
-pub enum BinaryOperator {
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
+pub enum UnaryOperator {
+    Negate,
+    Not,
 }
 
 #[derive(Debug)]
@@ -81,7 +92,7 @@ pub enum Statement {
     Expression(Expression),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 /// GLSL Types
 pub enum Literal {
     Float(f32),

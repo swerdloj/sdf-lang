@@ -118,18 +118,62 @@ ConstructorArgs: Vec<(String, ast::Expression)> = {
 
 // ---------------- EXPRESSION ----------------
 
-Expression: ast::Expression = {
-    Literal => ast::Expression::Literal(<>),
-    Ident => ast::Expression::Identifier(<>),
-    // BinaryExpression => <>,
+// FIXME: Understand how precedence works
+pub Expression: ast::Expression = {
+    BooleanExpr => <>,
 }
 
-// TODO: Add precedence and associativity to remove the local ambiguity here
-BinaryExpression: ast::Expression = {
-    <l:Expression> <op:BinaryOperator> <r:Expression> => ast::Expression::Binary {
-        lhs: Box::new(l),
+// Fourth precedence
+BooleanExpr: ast::Expression = {
+    <lhs:BooleanExpr> <op:BoolOp> <rhs:AdditiveExpr> => ast::Expression::Binary {
+        lhs: Box::new(lhs),
         operator: op,
-        rhs: Box::new(r),
+        rhs: Box::new(rhs),
+    },
+
+    AdditiveExpr => <>,
+}
+
+// Third precedence
+AdditiveExpr: ast::Expression = {
+    <lhs:AdditiveExpr> <op:AddOp> <rhs:MultiplicativeExpr> => ast::Expression::Binary {
+        lhs: Box::new(lhs),
+        operator: op,
+        rhs: Box::new(rhs),
+    },
+
+    MultiplicativeExpr => <>,
+}
+
+// Second precedence
+MultiplicativeExpr: ast::Expression = {
+    <lhs:MultiplicativeExpr> <op:MultOp> <rhs:BaseExpr> => {
+        ast::Expression::Binary {
+            lhs: Box::new(lhs),
+            operator: op,
+            rhs: Box::new(rhs),
+        }
+    },
+
+    BaseExpr => <>,
+}
+
+// First precedence
+BaseExpr: ast::Expression = {
+    "(" <Expression> ")" => <>,
+
+    Literal => ast::Expression::Literal(<>),
+
+    Ident => ast::Expression::Identifier(<>),
+
+    "-" <BaseExpr> => ast::Expression::Unary {
+        operator: ast::UnaryOperator::Negate,
+        rhs: Box::new(<>),
+    },
+
+    "!" <BaseExpr> => ast::Expression::Unary {
+        operator: ast::UnaryOperator::Not,
+        rhs: Box::new(<>),
     },
 }
 
@@ -137,9 +181,28 @@ AssignmentOperator: ast::AssignmentOperator = {
     "=" => ast::AssignmentOperator::Assign,
 }
 
-BinaryOperator: ast::BinaryOperator = {
+#[inline]
+MultOp: ast::BinaryOperator = {
+    "*" => ast::BinaryOperator::Multiply,
+    "/" => ast::BinaryOperator::Divide,
+}
+
+#[inline]
+AddOp: ast::BinaryOperator = {
     "+" => ast::BinaryOperator::Plus,
     "-" => ast::BinaryOperator::Minus,
+}
+
+#[inline]
+BoolOp: ast::BinaryOperator = {
+    "==" => ast::BinaryOperator::EqualTo,
+    "!=" => ast::BinaryOperator::NotEqualTo,
+    ">=" => ast::BinaryOperator::GreaterThanOrEqualTo,
+    "<=" => ast::BinaryOperator::LessThanOrEqualTo,
+    ">" => ast::BinaryOperator::GreaterThan,
+    "<" => ast::BinaryOperator::LessThan,
+    "&&" => ast::BinaryOperator::And,
+    "||" => ast::BinaryOperator::Or,
 }
 
 // ---------------- IDENTIFIER & LITERAL ----------------
