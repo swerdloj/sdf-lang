@@ -51,7 +51,9 @@ Function: ast::Item = {
 
 #[inline]
 FunctionParams: Vec<(String, String)> = {
-    "(" <multi:(<Ident> ":" <Ident> ",")*> <single:(<Ident> ":" <Ident>)?> ")" => {
+    "(" <multi:(<Ident> ":" <Ident> ",")*> 
+        <single:(<Ident> ":" <Ident>)?> ")" 
+    => {
         let mut params = multi;
         
         if let Some(param) = single {
@@ -65,7 +67,7 @@ FunctionParams: Vec<(String, String)> = {
 // ---------------- STRUCT ----------------
 
 Struct: ast::Item = {
-    "struct" <id:Ident> "{" <fields:(StructField)+> "}" => ast::Item::Struct {
+    "struct" <id:Ident> "{" <fields:(StructFields)> "}" => ast::Item::Struct {
         name: id,
         fields,
     },
@@ -74,13 +76,26 @@ Struct: ast::Item = {
 // TODO: What would be valid defaults?
 // TODO: Make final comma optional
 #[inline]
-StructField: (String, String, Option<ast::Expression>) = {
-    <id:Ident> ":" <ty:Ident> <def:("=" <Expression>)?> "," => (id, ty, def),
+StructFields: Vec<(String, String, Option<ast::Expression>)> = {
+    <multi:(<Ident> ":" <Ident> <("=" Expression)?> ",")*> 
+    <single:(<Ident> ":" <Ident> <("=" Expression)?>)?> => {
+        let mut fields: Vec<(String, String, Option<ast::Expression>)> = multi.into_iter().map(|(name, ty, expr)| {
+            (name, ty, expr.map(|e| e.1))
+        }).collect();
+        
+        if let Some((name, ty, expr)) = single {
+            fields.push((name, ty, expr.map(|e| e.1)));
+        }
+
+        fields
+    }
+
+    // <id:Ident> ":" <ty:Ident> <def:("=" <Expression>)?> "," => (id, ty, def),
 }
 
 // ---------------- STATEMENT ----------------
 
-pub Statement: ast::Statement = {
+Statement: ast::Statement = {
     LetStatement => <>,
     <Expression> ";" => ast::Statement::Expression(<>),
 }
@@ -111,19 +126,44 @@ LetStatement: ast::Statement = {
     },
 }
 
-// TODO: Make final comma optional
 ConstructorArgs: Vec<(String, ast::Expression)> = {
-    <pair:(<Ident> ":" <Expression> ",")*> => pair,
+    <multi:(<Ident> ":" <Expression> ",")*>
+    <single:(<Ident> ":" <Expression>)?> => {
+        let mut args = multi;
+        
+        if let Some(arg) = single {
+            args.push(arg);
+        }
+
+        args
+    },
 }
 
 // ---------------- EXPRESSION ----------------
 
 // FIXME: Understand how precedence works
-pub Expression: ast::Expression = {
+Expression: ast::Expression = {
     BooleanExpr => <>,
 }
 
-// Fourth precedence
+// Treated same as identifier/literal
+FunctionCall: ast::Expression = {
+    <name:Ident> "(" <params_multi:(<Expression> ",")*>
+                     <param_final:(<Expression>)?> ")"
+    => {
+        let mut params = params_multi;
+        if let Some(param) = param_final {
+            params.push(param);
+        }
+
+        ast::Expression::FunctionCall {
+            name,
+            parameters: params,
+        }
+    }
+}
+
+// Fourth precedence - left associativity
 BooleanExpr: ast::Expression = {
     <lhs:BooleanExpr> <op:BoolOp> <rhs:AdditiveExpr> => ast::Expression::Binary {
         lhs: Box::new(lhs),
@@ -134,7 +174,7 @@ BooleanExpr: ast::Expression = {
     AdditiveExpr => <>,
 }
 
-// Third precedence
+// Third precedence - left associativity
 AdditiveExpr: ast::Expression = {
     <lhs:AdditiveExpr> <op:AddOp> <rhs:MultiplicativeExpr> => ast::Expression::Binary {
         lhs: Box::new(lhs),
@@ -145,7 +185,7 @@ AdditiveExpr: ast::Expression = {
     MultiplicativeExpr => <>,
 }
 
-// Second precedence
+// Second precedence - left associativity
 MultiplicativeExpr: ast::Expression = {
     <lhs:MultiplicativeExpr> <op:MultOp> <rhs:BaseExpr> => {
         ast::Expression::Binary {
@@ -158,13 +198,15 @@ MultiplicativeExpr: ast::Expression = {
     BaseExpr => <>,
 }
 
-// First precedence
+// First precedence - right associativity (for unary ops)
 BaseExpr: ast::Expression = {
     "(" <Expression> ")" => <>,
 
     Literal => ast::Expression::Literal(<>),
 
     Ident => ast::Expression::Identifier(<>),
+
+    FunctionCall => <>,
 
     "-" <BaseExpr> => ast::Expression::Unary {
         operator: ast::UnaryOperator::Negate,
@@ -177,8 +219,13 @@ BaseExpr: ast::Expression = {
     },
 }
 
+#[inline]
 AssignmentOperator: ast::AssignmentOperator = {
     "=" => ast::AssignmentOperator::Assign,
+    "+=" => ast::AssignmentOperator::AddAssign,
+    "-=" => ast::AssignmentOperator::SubtractAssign,
+    "*=" => ast::AssignmentOperator::MultiplyAssign,
+    "/=" => ast::AssignmentOperator::DivideAssign,
 }
 
 #[inline]

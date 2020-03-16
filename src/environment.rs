@@ -19,8 +19,12 @@ impl Environment {
             fs::create_dir(output_path)?;
         }
 
-        let mut file = fs::File::create(output_path.join("ast.txt"))?;
+        let ast_path = output_path.join("ast.txt");
+
+        let mut file = fs::File::create(&ast_path)?;
         file.write_fmt(format_args!("{:#?}", &ast))?;
+
+        println!("AST saved to {:?}", &ast_path);
 
         Ok(())
     }

@@ -35,9 +35,11 @@ pub enum Expression {
         operator: UnaryOperator,
         rhs: Box<Expression>,
     },
-    __Temporary,
+    FunctionCall {
+        name: String,
+        parameters: Vec<Expression>,
+    },
 }
-
 
 #[derive(Debug)]
 pub struct Constructor {
@@ -92,7 +94,7 @@ pub enum Statement {
     Expression(Expression),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 /// GLSL Types
 pub enum Literal {
     Float(f32),

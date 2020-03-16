@@ -1,40 +1,50 @@
-// Simple test case
-// First goal: generate GLSL from this example
+/*
 
-/* This is a multi-line comment
-    asdf
-    *
-    with symbols: // /
+    *Very* simple example of sdf-lang
+
+    Demonstrated here:
+    - Structs
+      - Fields and defaults
+
+    - Functions
+      - Parameters
+      - Return types
+
+    - Scenes
+
+    - Statements
+      - Statement blocks
+
+    - Expressions
+      - Function calls
+
+    - Comments
+
 */
 
-// Scenes
+// Fields must be typed. May have defaults. Final comma optional.
+struct some_struct {
+    field1: int = 2.3,
+    no_default: int,
+    no_final_comma: int = default3
+}
+
+// Functions are the same as Rust
+fn function(param1: type1, param2: type2) -> return_type {
+    1 / 2 != 8.3;
+}
+
+// Scenes will allow for SDF interactions (point manipulation, etc.)
 scene main {
-    // Type inferrence
-    let x = 7.0;
-    // Type specification
-    let y: int = 10;
+    let x = 1 + 2 * 3;
 
-    let boolean = false;
-
-    // uniforms
-    @uniform
-    let uniform_var = -1;
-
-    // Assignment via expression
-    let _z = x * y;
-
-    // If expressions
-    if x == 12 {
-        y += 1;
-    } else {
-        y -= 1;
-    }
-
-    // SDF object (with defaults) via constructor
-    let cube: Box {
-        length: 1,
-        width: 1,
-        height: 1,
-        position: vec3{0, 0, 0},
+    let s: some_struct {
+        field1: x,
+        field2: x + 3 - function_call(),
+        no_final_comma: 4 == 3 + 1
     };
+
+    function(1, 2);
+
+    let y = true && false;
 }

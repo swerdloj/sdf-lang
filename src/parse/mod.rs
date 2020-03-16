@@ -35,6 +35,7 @@ pub fn parse(input: &str) -> Result<ast::AST, String> {
     ast
 }
 
+/// Makes lalrpop errors readable
 fn vec_to_string(vec: Vec<String>) -> String {
     let mut string = String::new();
     for item in vec {
@@ -49,6 +50,9 @@ fn vec_to_string(vec: Vec<String>) -> String {
     string
 }
 
+/// Simple parser test cases. Note that only full ASTs are generated
+/// 
+/// This is is to prevent lalrpop from generating more code than needed
 mod parser_test {
     use crate::parse::parser;
     
@@ -71,8 +75,10 @@ mod parser_test {
 
     #[test]
     fn raw_expressions() {
-        let ast = parser::ExpressionParser::new().parse("
-                1 / -x + 2 != 7 * 1 - (3 / 4)
+        let ast = super::parse("
+            scene main {
+                1 / -x + 2 != 7 * 1 - (3 / 4) ;
+            }
         ");
         
         println!("{:#?}", ast.unwrap());
@@ -133,8 +139,10 @@ mod parser_test {
 
     #[test]
     fn expression_statement() {
-        let ast = parser::StatementParser::new().parse("
-            expression_as_statement;
+        let ast = super::parse("
+            scene main {
+                expression_as_statement;
+            }
         ");
         
         println!("{:#?}", ast.unwrap());
@@ -142,8 +150,10 @@ mod parser_test {
 
     #[test]
     fn let_statement() {
-        let ast = parser::StatementParser::new().parse("
-            let x = 1;
+        let ast = super::parse("
+            scene main {
+                let x = 1;
+            }
         ");
         
         println!("{:#?}", ast.unwrap());
@@ -151,11 +161,13 @@ mod parser_test {
 
     #[test]
     fn let_constructor() {
-        let ast = parser::StatementParser::new().parse("
-            let x: y { 
-                f1: 1, 
-                f2: 2,
-            };
+        let ast = super::parse("
+            scene main {
+                let x: y { 
+                    f1: 1, 
+                    f2: 2,
+                };
+            }
         ");
         
         println!("{:#?}", ast.unwrap());
