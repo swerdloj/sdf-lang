@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::prelude::Write;
 
+use crate::exit_with_message;
 
 // TODO: Find better name
 #[derive(Debug)]
@@ -30,15 +31,12 @@ impl Environment {
     }
 
     pub fn get() -> Self {
-        use std::process::exit;
-
         // All arguments with associated indices
         // Note that arg[0] is executable's path
         let args: Vec<String> = std::env::args().collect();
 
         if args.len() == 1 {
-            println!("Error: No arguments specified. Run with '--help' to see proper usage.");
-            exit(0);
+            exit_with_message(format!("Error: No arguments specified. Run with '--help' to see proper usage."));
         }
 
         // DEFAULTS
@@ -51,21 +49,20 @@ impl Environment {
         loop {
             match args[index].as_str() {
                 "--help" => {
-                    println!(
+                    exit_with_message(format!(
                              "sdf-lang compiler usage:\n
                               --help\t\tDisplay this message\n
                               --input PATH\tSpecify the input file path\n
                               --output PATH\tSpecify the output file path. Only specify the file to store in /output/FILE\n
                               --AST\t\tSave the AST to text file in output directory
                               "
-                            );
-                    exit(0);
+                            )
+                        );
                 }
 
                 "--input" => {
                     if input.is_some() {
-                        println!("Error: Input path is redefined");
-                        exit(0);
+                        exit_with_message(format!("Error: Input path is redefined"));
                     }
                     
                     if let Some(path) = args.get(index + 1) {
@@ -73,12 +70,10 @@ impl Environment {
                         if p.exists() {
                             input = Some(p);
                         } else {
-                            println!("Error: No such input file exists");
-                            exit(0);
+                            exit_with_message(format!("Error: No such input file exists"));
                         }
                     } else {
-                        println!("Error: No input path specified");
-                        exit(0);
+                        exit_with_message(format!("Error: No input path specified"));
                     }
 
                     // The next index was the path, so skip it
@@ -87,8 +82,7 @@ impl Environment {
                 
                 "--output" => {
                     if output.is_some() {
-                        println!("Error: Output path is redefined");
-                        exit(0);
+                        exit_with_message(format!("Error: Output path is redefined"));
                     }
                     
                     if let Some(path) = args.get(index + 1) {
@@ -101,8 +95,7 @@ impl Environment {
                             output = Some(p);
                         }
                     } else {
-                        println!("Error: No output path specified");
-                        exit(0);
+                        exit_with_message(format!("Error: No output path specified"));
                     }
                     
                     // The next index was the path, so skip it
@@ -115,8 +108,7 @@ impl Environment {
 
                 // Unknown
                 x => {
-                    println!("Error: Unknown argument '{}'. Run with '--help' to see proper usage.", x);
-                    exit(0);
+                    exit_with_message(format!("Error: Unknown argument '{}'. Run with '--help' to see proper usage.", x));
                 }
             }
 
@@ -128,13 +120,11 @@ impl Environment {
         }
 
         if input.is_none() {
-            println!("Error: Input path was not specified. Run with '--help' to see proper usage.");
-            exit(0);
+            exit_with_message(format!("Error: Input path was not specified. Run with '--help' to see proper usage."));
         }
         
         if output.is_none() {
-            println!("Error: Output path was not specified. Run with '--help' to see proper usage.");
-            exit(0);
+            exit_with_message(format!("Error: Output path was not specified. Run with '--help' to see proper usage."));
         }
 
         Environment {

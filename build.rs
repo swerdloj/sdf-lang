@@ -1,9 +1,6 @@
 extern crate lalrpop;
 
 fn main() {
-    // lalrpop files -> Rust files
-    // lalrpop::process_root().unwrap();
-
     println!("cargo:rerun-if-changed=src/parse/parser.lalrpop");
 
     lalrpop::Configuration::new()

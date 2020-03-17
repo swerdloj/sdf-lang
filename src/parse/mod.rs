@@ -14,7 +14,7 @@ pub fn parse(input: &str) -> Result<ast::AST, String> {
                 format!("Invalid token, '{}', at location {}", &input[location..location+1], location)
             }
 
-            ParseError::UnrecognizedEOF { location, expected } => {
+            ParseError::UnrecognizedEOF { location: _, expected } => {
                 format!("File ended while expecting one of {:?}", vec_to_string(expected))
             }
             
@@ -22,7 +22,7 @@ pub fn parse(input: &str) -> Result<ast::AST, String> {
                 format!("Expected one of {}, but found '{}'", vec_to_string(expected), (token.1).1)
             }
             
-            ParseError::ExtraToken { token } => {
+            ParseError::ExtraToken { token: _ } => {
                 format!("TODO: extra token error")
             }
             
@@ -53,6 +53,7 @@ fn vec_to_string(vec: Vec<String>) -> String {
 /// Simple parser test cases. Note that only full ASTs are generated
 /// 
 /// This is is to prevent lalrpop from generating more code than needed
+#[allow(unused)]
 mod parser_test {
     use crate::parse::parser;
     

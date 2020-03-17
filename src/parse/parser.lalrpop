@@ -43,6 +43,7 @@ Scene: ast::Item = {
 Function: ast::Item = {
     "fn" <name:Ident> <params:FunctionParams> <return_type:("->" <Ident>)?> <s:StatementBlock> 
     => ast::Item::Function {
+        name,
         parameters: params,
         return_type,
         statements: s,
@@ -74,7 +75,6 @@ Struct: ast::Item = {
 }
 
 // TODO: What would be valid defaults?
-// TODO: Make final comma optional
 #[inline]
 StructFields: Vec<(String, String, Option<ast::Expression>)> = {
     <multi:(<Ident> ":" <Ident> <("=" Expression)?> ",")*> 

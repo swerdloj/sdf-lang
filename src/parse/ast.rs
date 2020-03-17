@@ -6,6 +6,7 @@ pub type AST = Vec<Item>;
 #[derive(Debug)]
 pub enum Item {
     Function {
+        name: String,
         parameters: Vec<(String, String)>,
         return_type: Option<String>,
         statements: Vec<Statement>,

@@ -1,13 +1,7 @@
-// 0 - Input -> Environment/Text
-// 1 - Analyze(Text) -> Lexemes
-// 2 - Lexer(Lexemes) -> Tokens
-// 3 - Parser(Tokens) -> AST
-// 4 - AST -> GLSL
-
 extern crate sdf_lang;
 
 use sdf_lang::{
-    parse, environment
+    parse, environment, exit_with_message
 };
 
 fn main() -> Result<(), std::io::Error> {
@@ -18,10 +12,9 @@ fn main() -> Result<(), std::io::Error> {
     println!("{:#?}", env);
 
     // Print any parse errors, then exit
-    let ast = parse::parse(&input).map_err(|e| {
-        println!("Parse Error: {}", e);
-        std::process::exit(0);
-    });
+    let ast = parse::parse(&input).map_err(|e| 
+        exit_with_message(format!("Parse Error: {}", e)) 
+    );
 
     // Write the AST to a file
     if env.save_ast {
