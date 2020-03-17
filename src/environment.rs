@@ -12,7 +12,21 @@ pub struct Environment {
     pub save_ast: bool,
 }
 
+// TODO: save_output/ast have weird formatting on their path `println!`s
 impl Environment {
+    pub fn save_output(&self, output_glsl: String) -> Result<(), std::io::Error> {       
+        if !self.output_path.parent().expect("Cannot write to executable directory").exists() {
+            fs::create_dir(self.output_path.parent().unwrap())?;
+        }
+
+        let mut file = fs::File::create(&self.output_path)?;
+        file.write_fmt(format_args!("{}", output_glsl))?;
+
+        println!("GLSL saved to ./{:?}", &self.output_path);
+
+        Ok(())
+    }
+
     pub fn save_ast(&self, ast: &crate::parse::ast::AST) -> Result<(), std::io::Error> {
         let output_path = Path::new("./output");
 
@@ -89,7 +103,8 @@ impl Environment {
                         let p = PathBuf::from(path);
                         if p.exists() {
                             // TODO: Overwrite existing??
-                            unimplemented!();
+                            println!("Overwriting previous...");
+                            output = Some(p);
                         } else {
                             // TODO: Create path if needed
                             output = Some(p);

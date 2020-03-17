@@ -8,7 +8,8 @@ pub enum Item {
     Function {
         name: String,
         parameters: Vec<(String, String)>,
-        return_type: Option<String>,
+        // If not specified, return type will be "void"
+        return_type: String,
         statements: Vec<Statement>,
     },
     Scene {
@@ -17,9 +18,9 @@ pub enum Item {
     },
     Struct {
         name: String,
-        // TODO: What would be valid defaults? Expression seems to broad.
-        // field: type = optional_default,
-        fields: Vec<(String, String, Option<Expression>)>,
+        // TODO: Support more than just literals
+        // "field: type = optional_default,"
+        fields: Vec<(String, String, Option<Literal>)>,
     }
 }
 
@@ -85,6 +86,7 @@ pub enum AssignmentOperator {
 pub enum Statement {
     Let {
         ident: String,
+        tag: Option<Tag>,
         ty: Option<String>,
         expression: Option<Expression>,
     },
@@ -92,10 +94,21 @@ pub enum Statement {
         ident: String,
         constructor: Constructor,
     },
+    Return {
+        expression: Option<Expression>,
+    },
     Expression(Expression),
 }
 
 #[derive(Debug)]
+/// A tag identifies variables which require CPU initialization or modification
+pub enum Tag {
+    Uniform,
+    Texture2D,
+    // TODO: What else would be needed?
+}
+
+#[derive(Debug, Clone)]
 /// GLSL Types
 pub enum Literal {
     Float(f32),

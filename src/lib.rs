@@ -9,6 +9,13 @@ mod lex;
 pub mod parse;
 pub mod translate;
 
+
+#[cfg(test)]
+pub fn exit_with_message(message: String) {
+    panic!("{}", message);
+}
+
+#[cfg(not(test))]
 pub fn exit_with_message(message: String) {
     println!("{}", message);
     std::process::exit(0);

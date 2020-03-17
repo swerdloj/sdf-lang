@@ -4,10 +4,10 @@ lalrpop_mod!(pub parser, "/parse/parser.rs");
 
 
 /// Returns the parsed AST or formats the **default** lalrpop lexer error
-pub fn parse(input: &str) -> Result<ast::AST, String> {
+pub fn parse(input: &str, context: &mut crate::translate::Context) -> Result<ast::AST, String> {
     use lalrpop_util::ParseError;
 
-    let ast = parser::ASTParser::new().parse(input).map_err(|error| {
+    let ast = parser::ASTParser::new().parse(context, input).map_err(|error| {
         // TODO: Print line and column (obtained via `token` and `location`)
         match error {
             ParseError::InvalidToken { location } => {
@@ -54,12 +54,19 @@ fn vec_to_string(vec: Vec<String>) -> String {
 /// 
 /// This is is to prevent lalrpop from generating more code than needed
 #[allow(unused)]
+#[cfg(test)]
 mod parser_test {
     use crate::parse::parser;
+
+    fn test_input(input: &str) {
+        let ast = super::parse(input, &mut crate::translate::Context::new());
+
+        println!("{:#?}", ast.unwrap());
+    }
     
     #[test]
     fn expression_integration() {
-        let ast = super::parse("
+       test_input("
                 scene main {
                     let x = 2 + 3;
 
@@ -70,24 +77,20 @@ mod parser_test {
                     };
                 }
         ");
-        
-        println!("{:#?}", ast.unwrap());
     }
 
     #[test]
     fn raw_expressions() {
-        let ast = super::parse("
+       test_input("
             scene main {
                 1 / -x + 2 != 7 * 1 - (3 / 4) ;
             }
         ");
-        
-        println!("{:#?}", ast.unwrap());
     }
 
     #[test]
     fn comments() {
-        let ast = super::parse("
+       test_input("
             /*
             struct commented_out {
                 field1: value1 = default,
@@ -109,22 +112,20 @@ mod parser_test {
                 let y = x; // Another comment
             }
         ");
-        
-        println!("{:#?}", ast.unwrap());
     }
 
     #[test]
-    fn ast_root_with_struct_with_function_with_scene_with_constructor() {
-        let ast = super::parse("
+    fn struct_function_scene_and_constructor() {
+       test_input("
             struct something {
-                field1: value1 = default,
-                field2: no_default,
+                field1: int = 12,
+                field2: float,
             }
 
             scene main {
                 let box: Box {
-                    field1: value1,
-                    field2: value2,
+                    field1: 1,
+                    field2: 1,
                 };
                 let x = 7;
                 let y = x;
@@ -134,35 +135,29 @@ mod parser_test {
                 statements;
             }
         ");
-        
-        println!("{:#?}", ast.unwrap());
     }
 
     #[test]
     fn expression_statement() {
-        let ast = super::parse("
+       test_input("
             scene main {
                 expression_as_statement;
             }
         ");
-        
-        println!("{:#?}", ast.unwrap());
     }
 
     #[test]
     fn let_statement() {
-        let ast = super::parse("
+       test_input("
             scene main {
                 let x = 1;
             }
         ");
-        
-        println!("{:#?}", ast.unwrap());
     }
 
     #[test]
     fn let_constructor() {
-        let ast = super::parse("
+       test_input("
             scene main {
                 let x: y { 
                     f1: 1, 
@@ -170,7 +165,5 @@ mod parser_test {
                 };
             }
         ");
-        
-        println!("{:#?}", ast.unwrap());
     }
 }

@@ -24,6 +24,8 @@ Therefore, all code in a `.sdf` will be run **per-pixel** just like a typical fr
 - Scenes
 - (TODO:) Enums 
 
+TODO: in -> copy
+      inout -> &mut
 
 ### **Functions**
 Functions in sdf-lang are identical to Rust:
@@ -94,3 +96,5 @@ The most common tag is `@uniform` which specifies that a variable will be modifi
 @uniform
 let x: int = 7;
 ```
+
+Furthermore, such `@uniform` variables are added to the globabl scope.
