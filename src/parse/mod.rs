@@ -1,10 +1,11 @@
 pub mod ast;
+pub mod context;
 
 lalrpop_mod!(pub parser, "/parse/parser.rs");
 
 
 /// Returns the parsed AST or formats the **default** lalrpop lexer error
-pub fn parse(input: &str, context: &mut crate::translate::Context) -> Result<ast::AST, String> {
+pub fn parse(input: &str, context: &mut context::Context) -> Result<ast::AST, String> {
     use lalrpop_util::ParseError;
 
     let ast = parser::ASTParser::new().parse(context, input).map_err(|error| {
@@ -59,7 +60,7 @@ mod parser_test {
     use crate::parse::parser;
 
     fn test_input(input: &str) {
-        let ast = super::parse(input, &mut crate::translate::Context::new());
+        let ast = super::parse(input, &mut super::context::Context::new());
 
         println!("{:#?}", ast.unwrap());
     }

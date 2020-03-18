@@ -1,5 +1,19 @@
 use crate::parse::ast::*;
 
+pub fn uniforms(uniforms: &std::collections::HashSet<(String, String)>) -> String {
+    let mut glsl = String::new();
+
+    for (index, (name, ty)) in uniforms.iter().enumerate() {
+        glsl.push_str(&format!("layout(location = {}) uniform {} {};\n", index, ty, name));
+    }
+
+    if uniforms.len() >= 1 {
+        glsl.push('\n');
+    }
+
+    glsl
+}
+
 pub fn structure(name: &str, fields: &Vec<(String, String, Option<Literal>)>) -> String {
     let mut glsl = String::new();
 
@@ -42,7 +56,7 @@ pub fn function(name: &str, parameters: &Vec<(String, String)>, return_type: &st
 pub fn scene(name: &str) -> String {
     let mut glsl = String::new();
 
-    glsl.push_str(&format!("RayResult {}(vec3 point) {{\n", name));
+    glsl.push_str(&format!("RayResult __scene__{}(vec3 point) {{\n", name));
     glsl.push_str("\tfloat distance; uint hit;");
 
     glsl.push_str("\n}\n\n");

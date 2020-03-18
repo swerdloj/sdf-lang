@@ -22,7 +22,7 @@ impl Environment {
         let mut file = fs::File::create(&self.output_path)?;
         file.write_fmt(format_args!("{}", output_glsl))?;
 
-        println!("GLSL saved to ./{:?}", &self.output_path);
+        println!("GLSL saved to {:?}", &self.output_path);
 
         Ok(())
     }
@@ -90,7 +90,7 @@ impl Environment {
                         exit_with_message(format!("Error: No input path specified"));
                     }
 
-                    // The next index was the path, so skip it
+                    // The next index is the path, so skip it
                     index += 1;
                 }
                 
@@ -102,8 +102,7 @@ impl Environment {
                     if let Some(path) = args.get(index + 1) {
                         let p = PathBuf::from(path);
                         if p.exists() {
-                            // TODO: Overwrite existing??
-                            println!("Overwriting previous...");
+                            // TODO: This will overwrite existing file. User should be notified
                             output = Some(p);
                         } else {
                             // TODO: Create path if needed
@@ -113,7 +112,7 @@ impl Environment {
                         exit_with_message(format!("Error: No output path specified"));
                     }
                     
-                    // The next index was the path, so skip it
+                    // The next index is the path, so skip it
                     index += 1;
                 }
 

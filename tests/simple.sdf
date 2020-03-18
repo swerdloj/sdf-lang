@@ -1,25 +1,5 @@
 /*
-
-    *Very* simple example of sdf-lang
-
-    Demonstrated here:
-    - Structs
-      - Fields and defaults
-
-    - Functions
-      - Parameters
-      - Return types
-
-    - Scenes
-
-    - Statements
-      - Statement blocks
-
-    - Expressions
-      - Function calls
-
-    - Comments
-
+    Very simple example of sdf-lang
 */
 
 // Fields must be typed. May have defaults. Final comma optional.
@@ -30,7 +10,7 @@ struct SomeStruct {
 }
 
 // Functions are the same as Rust
-fn function(param1: float, param2: int) -> bool {
+fn function(param1: float, param2: int, struct_field: SomeStruct) -> bool {
     return 1 / 2 != 8.3;
 }
 
@@ -41,7 +21,7 @@ fn void_function() {
 // Scenes will allow for SDF interactions (point manipulation, etc.)
 scene main {
     @uniform
-    let x = 1 + 2 * 3;
+    let x: int = 1 + 2 * 3;
 
     let s: SomeStruct {
         field1: x,

@@ -8,6 +8,7 @@ The following items are not yet implemented
 - Arrays
 ### Expressions
 - `if`/`else`
+- `match`
 - Constructors
 - Expression type analysis
 ### Statements
@@ -15,7 +16,8 @@ The following items are not yet implemented
 - `while` loop
 - `do while` loop
 - `return` statement
-- `match` statement
+- `break`
+- `continue`
 ### Structs
 - `impl` functions
 

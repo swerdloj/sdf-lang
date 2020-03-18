@@ -1,19 +1,19 @@
-use crate::parse::ast;
+use crate::parse::{context::Context, ast};
+use crate::exit_with_message;
 
-use crate::translate;
-
-grammar(context: &mut translate::Context);
+grammar(context: &mut Context);
 
 
 match {
     // Do not allow "true" or "false" as identifiers. Make them literals.
     r"(true)|(false)" => BOOL,
+
     // Ignore comments
     // from https://github.com/lalrpop/lalrpop/pull/509/commits/ee2f7060e99f902620ac4edeea5cfe3c3551f09c)
     r"\s*" => { },
     r"//[^\n\r]*[\n\r]*" => { },
     // TODO: Look at this regex; it may do more than I want 
-    // TODO: Inline comments don't work
+    // FIXME: Inline comments don't work
     r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
 } else {
     _
@@ -27,6 +27,7 @@ pub AST: ast::AST = {
     Item* => <>,
 }
 
+// TODO: Allow global let statements
 // An AST is composed of Items
 Item: ast::Item = {
     Function => <>,
@@ -120,14 +121,36 @@ StatementBlock: Vec<ast::Statement> = {
     
 // FIXME: Separating out `Constructor` as "Ident { ConstructorArgs }" causes ambiguities
 LetStatement: ast::Statement = {
-    // TODO: Allow non-assigning declarations
-    // let x = 7;
     <tag:("@" <Tag>)?>
-    "let" <id:Ident> <ty: (":" <Ident>)?> "=" <expr:Expression> ";" => ast::Statement::Let {
-        ident: id.to_owned(),
-        tag,
-        ty,
-        expression: Some(expr),
+    "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => {
+        if let Some(ref t) = tag {
+            if ty.is_none() {
+                exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but its type was not specified", id, t));
+                unreachable!();
+            }
+
+            if expr.is_none() {
+                exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but not initialized", id, t));
+                unreachable!();
+            }
+
+            match t {
+                ast::Tag::Uniform => {
+                    context.declare_uniform(id.clone(), ty.clone().unwrap());
+                }
+
+                _ => {
+                    unimplemented!();
+                }
+            }
+        }
+
+        ast::Statement::Let {
+            ident: id.to_owned(),
+            tag,
+            ty,
+            expression: expr,
+        }
     },
 
     // let identifier: type { param1: value1, param2: value2, ...};
