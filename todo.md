@@ -10,22 +10,19 @@ The following items are not yet implemented
 - `if`/`else`
 - `match`
 - Constructors
-- Expression type analysis
 ### Statements
 - `for` loop  
 - `while` loop
 - `do while` loop
-- `return` statement
 - `break`
 - `continue`
 ### Structs
 - `impl` functions
 
 ## **Translator**
-- Functions
+- Type inferrence
+- Type casting
 - Scenes
-- Statements
-- Expressions
 
 ## **Runtime**
 - Everything

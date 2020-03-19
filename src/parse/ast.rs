@@ -18,13 +18,12 @@ pub enum Item {
     },
     Struct {
         name: String,
-        // TODO: Support more than just literals
         // "field: type = optional_default,"
-        fields: Vec<(String, String, Option<Literal>)>,
+        fields: Vec<(String, String, Option<Expression>)>,
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expression {
     Literal(Literal),
     Identifier(String),
@@ -32,15 +31,22 @@ pub enum Expression {
         lhs: Box<Expression>,
         operator: BinaryOperator,
         rhs: Box<Expression>,
+        ty: String,
     },
     Unary {
         operator: UnaryOperator,
         rhs: Box<Expression>,
+        ty: String,
     },
     FunctionCall {
         name: String,
         parameters: Vec<Expression>,
+        ty: String,
     },
+    // Cast {
+    //     from: String,
+    //     to: String,
+    // }
 }
 
 #[derive(Debug)]
@@ -49,13 +55,15 @@ pub struct Constructor {
     pub fields: Vec<(String, Expression)>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinaryOperator {
     Plus,
     Minus,
 
     Multiply,
     Divide,
+
+    // AsCast,
 
     EqualTo,
     NotEqualTo,
@@ -67,7 +75,7 @@ pub enum BinaryOperator {
     Or,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOperator {
     Negate,
     Not,
@@ -94,6 +102,11 @@ pub enum Statement {
         ident: String,
         constructor: Constructor,
     },
+    Assignment {
+        ident: String,
+        op: AssignmentOperator,
+        expression: Expression,
+    },
     Return {
         expression: Option<Expression>,
     },
@@ -105,6 +118,7 @@ pub enum Statement {
 pub enum Tag {
     Uniform,
     Texture2D,
+    Out,
     // TODO: What else would be needed?
 }
 

@@ -46,6 +46,9 @@ Scene: ast::Item = {
 Function: ast::Item = {
     "fn" <name:Ident> <params:FunctionParams> <return_type:("->" <Ident>)?> <s:StatementBlock> 
     => {
+        // TODO: Ensure that return statement has same type as function
+        // TODO: Ensure that typed functions *have* a return statement
+
         let ret = if let Some(ty) = return_type {
             ty 
         } else {
@@ -91,11 +94,10 @@ Struct: ast::Item = {
     },
 }
 
-// TODO: Support more than just literals as defaults
 #[inline]
-StructFields: Vec<(String, String, Option<ast::Literal>)> = {
-    <multi:(<Ident> ":" <Ident> <("=" <Literal>)?> ",")*> 
-    <single:(<Ident> ":" <Ident> <("=" <Literal>)?>)?> => {
+StructFields: Vec<(String, String, Option<ast::Expression>)> = {
+    <multi:(<Ident> ":" <Ident> <("=" <Expression>)?> ",")*> 
+    <single:(<Ident> ":" <Ident> <("=" <Expression>)?>)?> => {
         let mut fields = multi;
         
         if let Some(field) = single {
@@ -108,8 +110,18 @@ StructFields: Vec<(String, String, Option<ast::Literal>)> = {
 
 // ---------------- STATEMENT ----------------
 
+// TODO: Ensure that let and return lhs has same type as rhs expression
 Statement: ast::Statement = {
     LetStatement => <>,
+    
+    "return" <expr:(Expression)?> ";" => {
+        ast::Statement::Return {
+            expression: expr,
+        }
+    },
+
+    AssignmentStatement => <>,
+
     <Expression> ";" => ast::Statement::Expression(<>),
 }
 
@@ -118,11 +130,27 @@ StatementBlock: Vec<ast::Statement> = {
         statements
     },
 }
+
+AssignmentStatement: ast::Statement = {
+    <id:Ident> <op:AssignmentOperator> <expr:Expression> ";" => {
+        // TODO: Ensure id type and expr type are compatible
+        if !context.is_var_in_scope(&id) {
+            exit_with_message(format!("No such variable in scope: '{}'", &id));
+        }
+
+        ast::Statement::Assignment {
+            ident: id,
+            op,
+            expression: expr,
+        }
+    }
+}
     
 // FIXME: Separating out `Constructor` as "Ident { ConstructorArgs }" causes ambiguities
 LetStatement: ast::Statement = {
     <tag:("@" <Tag>)?>
-    "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => {
+    "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => {              
+        // Tagged variables must have specified type and initial value
         if let Some(ref t) = tag {
             if ty.is_none() {
                 exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but its type was not specified", id, t));
@@ -145,25 +173,46 @@ LetStatement: ast::Statement = {
             }
         }
 
+        // Hack because 'ty' is immutable
+        let _ty = if ty.is_none() {
+            if let Some(assignment) = &expr {
+                let expr_type = context.expression_type(&assignment);
+                if expr_type != "void" {
+                    Some(expr_type)
+                } else {
+                    exit_with_message(format!("Error: Variable '{}' was assigned type 'void'.", &id));
+                    unreachable!();
+                }
+            } else {
+                None
+            }
+        } else {
+            // TODO: Check if expression type is compatible with declared type
+            ty
+        };
+
+        context.add_var_to_scope(id.clone(), _ty.clone().unwrap());
+
         ast::Statement::Let {
             ident: id.to_owned(),
             tag,
-            ty,
+            ty: _ty,
             expression: expr,
         }
     },
 
     // let identifier: type { param1: value1, param2: value2, ...};
-    "let" <id:Ident> ":" <ty:Ident> "{" <fields:(ConstructorArgs)> "}" ";" => ast::Statement::LetConstructor {
-        ident: id.to_owned(),
-        constructor: ast::Constructor {
-            ty: ty,
-            fields,
-        },
-    },
-
-    "return" <expr:(Expression)?> ";" => ast::Statement::Return {
-        expression: expr,
+    "let" <id:Ident> ":" <ty:Ident> "{" <fields:(ConstructorArgs)> "}" ";" => {
+        context.add_var_to_scope(id.clone(), ty.clone());
+        
+        // Fields are properly ordered and defaults are filled in here
+        ast::Statement::LetConstructor {
+            ident: id.to_owned(),
+            constructor: ast::Constructor {
+                ty: ty.clone(),
+                fields: context.generate_constructor(&ty, fields),
+            },
+        }
     },
 }
 
@@ -197,19 +246,26 @@ FunctionCall: ast::Expression = {
             params.push(param);
         }
 
+        let ty = context.check_function_call(&name, params.iter().map(|expr| {
+            context.expression_type(&expr)
+        }).collect());
+
         ast::Expression::FunctionCall {
             name,
             parameters: params,
+            ty,
         }
     }
 }
 
 // Fourth precedence - left associativity
+// Note that `BooleanExpr`s are always of type "bool" 
 BooleanExpr: ast::Expression = {
     <lhs:BooleanExpr> <op:BoolOp> <rhs:AdditiveExpr> => ast::Expression::Binary {
         lhs: Box::new(lhs),
         operator: op,
         rhs: Box::new(rhs),
+        ty: "bool".to_owned(),
     },
 
     AdditiveExpr => <>,
@@ -217,10 +273,17 @@ BooleanExpr: ast::Expression = {
 
 // Third precedence - left associativity
 AdditiveExpr: ast::Expression = {
-    <lhs:AdditiveExpr> <op:AddOp> <rhs:MultiplicativeExpr> => ast::Expression::Binary {
-        lhs: Box::new(lhs),
-        operator: op,
-        rhs: Box::new(rhs),
+    <lhs:AdditiveExpr> <op:AddOp> <rhs:MultiplicativeExpr> => {
+        let ty = context.add_type(
+            &context.expression_type(&lhs), &context.expression_type(&rhs)
+        );
+
+        ast::Expression::Binary {
+            lhs: Box::new(lhs),
+            operator: op,
+            rhs: Box::new(rhs),
+            ty,
+        }
     },
 
     MultiplicativeExpr => <>,
@@ -229,10 +292,15 @@ AdditiveExpr: ast::Expression = {
 // Second precedence - left associativity
 MultiplicativeExpr: ast::Expression = {
     <lhs:MultiplicativeExpr> <op:MultOp> <rhs:BaseExpr> => {
+        let ty = context.multiply_type(
+            &context.expression_type(&lhs), &context.expression_type(&rhs)
+        );
+
         ast::Expression::Binary {
             lhs: Box::new(lhs),
             operator: op,
             rhs: Box::new(rhs),
+            ty,
         }
     },
 
@@ -245,18 +313,35 @@ BaseExpr: ast::Expression = {
 
     Literal => ast::Expression::Literal(<>),
 
-    Ident => ast::Expression::Identifier(<>),
+    Ident => {
+        ast::Expression::Identifier(<>)
+    },
 
     FunctionCall => <>,
 
-    "-" <BaseExpr> => ast::Expression::Unary {
-        operator: ast::UnaryOperator::Negate,
-        rhs: Box::new(<>),
+    "-" <BaseExpr> => {
+        let ty = context.expression_type(&<>);
+
+        ast::Expression::Unary {
+            operator: ast::UnaryOperator::Negate,
+            rhs: Box::new(<>),
+            ty: context.negate_type(&ty),
+        }
     },
 
-    "!" <BaseExpr> => ast::Expression::Unary {
-        operator: ast::UnaryOperator::Not,
-        rhs: Box::new(<>),
+    "!" <BaseExpr> => {
+        let ty = context.expression_type(&<>);
+
+        // The "!" operator works only on bools
+        if ty != "bool" {
+            exit_with_message(format!("The binary not cannot be used on type '{}'", &ty));
+        }
+
+        ast::Expression::Unary {
+            operator: ast::UnaryOperator::Not,
+            rhs: Box::new(<>),
+            ty,
+        }
     },
 }
 
@@ -271,6 +356,7 @@ AssignmentOperator: ast::AssignmentOperator = {
 
 #[inline]
 MultOp: ast::BinaryOperator = {
+    // "as" => ast::BinaryOperator::AsCast,
     "*" => ast::BinaryOperator::Multiply,
     "/" => ast::BinaryOperator::Divide,
 }
@@ -303,6 +389,7 @@ Ident: String = {
 Tag: ast::Tag = {
     "uniform" => ast::Tag::Uniform,
     "texture2D" => ast::Tag::Texture2D,
+    "out" => ast::Tag::Out,
 }
 
 Literal: ast::Literal = {

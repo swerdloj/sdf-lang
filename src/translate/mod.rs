@@ -21,6 +21,10 @@ pub fn translate(ast: &AST, context: &crate::parse::context::Context) -> String 
 
     let mut glsl = String::new();
 
+    // TODO: Allow user to specify version
+    glsl.push_str("#version 450 core\n\n");
+    // glsl.push_str("out vec4 __out__color;\n\n");
+
     glsl.push_str(&template::uniforms(context.uniforms()));
 
     // TODO: Allow let statements at global scope for global variables
@@ -33,7 +37,7 @@ pub fn translate(ast: &AST, context: &crate::parse::context::Context) -> String 
 
             Item::Function { name, parameters, return_type, statements } => {
                 // TODO: Body statements
-                glsl.push_str(&template::function(name, parameters, &return_type));
+                glsl.push_str(&template::function(name, parameters, &return_type, statements));
             }
 
             Item::Scene { name, statements } => {
