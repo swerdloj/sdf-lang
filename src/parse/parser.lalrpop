@@ -57,6 +57,8 @@ Function: ast::Item = {
 
         context.declare_function(name.clone(), params.clone(), ret.clone());
 
+        // context.scopes.pop_scope();
+
         ast::Item::Function {
             name,
             parameters: params,
@@ -110,10 +112,10 @@ StructFields: Vec<(String, String, Option<ast::Expression>)> = {
 
 // ---------------- STATEMENT ----------------
 
-// TODO: Ensure that let and return lhs has same type as rhs expression
 Statement: ast::Statement = {
     LetStatement => <>,
     
+    // TODO: Type check with owning function
     "return" <expr:(Expression)?> ";" => {
         ast::Statement::Return {
             expression: expr,
@@ -127,15 +129,24 @@ Statement: ast::Statement = {
 
 StatementBlock: Vec<ast::Statement> = {
     "{" <statements:(Statement)*> "}" => {
+        // TODO: This doesn't account for scopes properly because it is called *after*
+        //          variables are declared
+        // TODO: Also, don't know where to pop the scope for same reason
+        context.scopes.push_scope();
+
         statements
     },
 }
 
 AssignmentStatement: ast::Statement = {
     <id:Ident> <op:AssignmentOperator> <expr:Expression> ";" => {
-        // TODO: Ensure id type and expr type are compatible
-        if !context.is_var_in_scope(&id) {
-            exit_with_message(format!("No such variable in scope: '{}'", &id));
+        if !context.scopes.is_var_in_scope(&id) {
+            exit_with_message(format!("Error: No such variable in scope: '{}'", &id));
+        }
+        
+        let expr_type = context.expression_type(&expr);
+        if !Context::castable(&expr_type, &context.scopes.var_type(&id)) {
+            exit_with_message(format!("Error: Variable '{}' cannot be assigned to incompatible type '{}'", &id, &expr_type));
         }
 
         ast::Statement::Assignment {
@@ -146,7 +157,6 @@ AssignmentStatement: ast::Statement = {
     }
 }
     
-// FIXME: Separating out `Constructor` as "Ident { ConstructorArgs }" causes ambiguities
 LetStatement: ast::Statement = {
     <tag:("@" <Tag>)?>
     "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => {              
@@ -174,7 +184,19 @@ LetStatement: ast::Statement = {
         }
 
         // Hack because 'ty' is immutable
-        let _ty = if ty.is_none() {
+        let checked_type = if let Some(specified_type) = ty {
+            // Check whether type assigned is compatible with user-specified
+            if let Some(assignment) = &expr {
+                let assigned_type = context.expression_type(assignment);
+                if !Context::castable(&assigned_type, &specified_type) {
+                    exit_with_message(format!("Error: Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
+                                               &id, &specified_type, &assigned_type));
+                    unreachable!();
+                }
+            }
+            Some(specified_type)
+        } else {
+            // Make sure inferred type is valid (not void like a void function call)
             if let Some(assignment) = &expr {
                 let expr_type = context.expression_type(&assignment);
                 if expr_type != "void" {
@@ -186,24 +208,21 @@ LetStatement: ast::Statement = {
             } else {
                 None
             }
-        } else {
-            // TODO: Check if expression type is compatible with declared type
-            ty
         };
 
-        context.add_var_to_scope(id.clone(), _ty.clone().unwrap());
+        context.scopes.add_var_to_scope(id.clone(), checked_type.clone().unwrap());
 
         ast::Statement::Let {
             ident: id.to_owned(),
             tag,
-            ty: _ty,
+            ty: checked_type,
             expression: expr,
         }
     },
 
     // let identifier: type { param1: value1, param2: value2, ...};
     "let" <id:Ident> ":" <ty:Ident> "{" <fields:(ConstructorArgs)> "}" ";" => {
-        context.add_var_to_scope(id.clone(), ty.clone());
+        context.scopes.add_var_to_scope(id.clone(), ty.clone());
         
         // Fields are properly ordered and defaults are filled in here
         ast::Statement::LetConstructor {
@@ -231,7 +250,7 @@ ConstructorArgs: Vec<(String, ast::Expression)> = {
 
 // ---------------- EXPRESSION ----------------
 
-// FIXME: Understand how precedence works
+// TODO: Understand how precedence works
 Expression: ast::Expression = {
     BooleanExpr => <>,
 }
@@ -246,9 +265,10 @@ FunctionCall: ast::Expression = {
             params.push(param);
         }
 
-        let ty = context.check_function_call(&name, params.iter().map(|expr| {
-            context.expression_type(&expr)
-        }).collect());
+        let ty = context.check_function_call(
+            &name, 
+            params.iter().map(|expr| context.expression_type(&expr)).collect()
+        );
 
         ast::Expression::FunctionCall {
             name,

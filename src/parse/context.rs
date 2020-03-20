@@ -19,6 +19,64 @@ struct FunctionSignature {
     return_type: String,
 }
 
+pub struct Scope {
+    // scope -> (name -> type)
+    scopes: HashMap<usize, HashMap<String, String>>,
+    // 0 is global scope
+    current: usize,
+}
+
+impl Scope {
+    fn new() -> Self {
+        let mut scopes = HashMap::new();
+        scopes.insert(0, HashMap::new());
+
+        Scope {
+            scopes,
+            current: 0,
+        }
+    }
+
+    pub fn push_scope(&mut self) {
+        self.current += 1;
+        self.scopes.insert(self.current, HashMap::new());
+    }
+
+    // No check is needed because scopes cannot be popped more than they are pushed
+    pub fn pop_scope(&mut self) {
+        self.scopes.remove(&self.current);
+        self.current -= 1;
+    }
+
+    pub fn add_var_to_scope(&mut self, name: String, ty: String) {
+        // println!("Adding '{}' to {}", &name, self.current);
+        if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), ty) {
+            exit_with_message(format!("Error: Variables '{}' already exists in the current scope", name));
+        }
+    }
+
+    pub fn is_var_in_scope(&self, name: &str) -> bool {
+        for scope in 0..=self.current {
+            if self.scopes.get(&scope).unwrap().get(name).is_some() {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn var_type(&self, name: &str) -> String {
+        for scope in 0..=self.current {
+            if let Some(ty) = self.scopes.get(&scope).unwrap().get(name) {
+                return ty.to_owned();
+            }
+        }
+
+        exit_with_message(format!("Unknown identifier '{}'", name));
+        unreachable!();
+    }
+}
+
 pub struct Context {
     /// Function name -> Function signature
     functions: HashMap<String, FunctionSignature>,
@@ -30,9 +88,7 @@ pub struct Context {
     // TODO: Default value is not implemented yet
     uniforms: HashSet<(String, String /*, DEFAULT VALUE HERE */)>,
 
-    // FIXME: Everything is in global scope for now
-    /// Map of identifier -> type
-    scopes: HashMap<String, String>,
+    pub scopes: Scope,
 }
 
 impl Context {
@@ -67,31 +123,7 @@ impl Context {
             structs: HashMap::new(),
             primitive_types,
             uniforms,
-            
-            scopes: HashMap::new(),
-        }
-    }
-
-    pub fn add_var_to_scope(&mut self, name: String, ty: String) {
-        if let Some(_old) = self.scopes.insert(name.clone(), self.validate_type(ty)) {
-            exit_with_message(format!("Error: Variables '{}' already exists in the current scope", name));
-        }
-    }
-
-    pub fn is_var_in_scope(&self, name: &str) -> bool {
-        if self.scopes.get(name).is_some() {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn var_type(&self, name: String) -> String {
-        if let Some(ty) = self.scopes.get(&name) {
-            ty.to_owned()
-        } else {
-            exit_with_message(format!("Unknown identifier '{}'", name));
-            unreachable!();
+            scopes: Scope::new(),
         }
     }
 
@@ -118,9 +150,8 @@ impl Context {
         }
     }
 
+    /// Order constructor arguments and place defaults where needed
     pub fn generate_constructor(&self, ty: &str, fields: Vec<(String, ast::Expression)>) -> Vec<(String, ast::Expression)> {
-        // Order the arguments and place defaults where missing
-
         // Existance is already guarenteed, so can just unwrap()
         let signature = self.structs.get(ty).unwrap();
         
@@ -133,7 +164,7 @@ impl Context {
 
         let mut all_fields = HashSet::new();
         // Ensure no extra fields were given by the user
-        for (field_name, _, _) in &signature.fields {
+        for (field_name, _field_type, _default) in &signature.fields {
             all_fields.insert(field_name.clone());
         }
 
@@ -143,9 +174,13 @@ impl Context {
             }
         }
 
-        // TODO: Ensure types are compatible
         for (field_name, field_type, default) in &signature.fields {
             if let Some(user_supplied) = supplied.get(field_name) {
+                // Ensure types are compatible
+                if !Self::castable(&self.expression_type(user_supplied), field_type) {
+                    exit_with_message(format!("Error: The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(user_supplied)));
+                }
+
                 constructor.push((field_name.clone(), user_supplied.clone()));
             } else {
                 // Use default
@@ -156,8 +191,6 @@ impl Context {
                 }
             }
         }
-
-        assert_eq!(constructor.len(), signature.fields.len());
 
         constructor
     }
@@ -184,7 +217,7 @@ impl Context {
 
             for ((param_name, param_type), passed_type) in function.parameters.iter().zip(passed_param_types.iter()) {
                 if !Self::castable(passed_type, param_type) {
-                    exit_with_message(format!("The parameter '{}' in function '{}' takes a '{}', but a '{}' was given",
+                    exit_with_message(format!("The parameter '{}' in function '{}' takes a '{}', but a '{}' was given (cannot cast)",
                                                         param_name, name, param_type, passed_type));
                 }
             }
@@ -203,60 +236,39 @@ impl Context {
             return true;
         }
 
-        println!("Casting {} to {}", from, to);
-
         match to {
             "double" => {
                 match from {
                     "float" | "int" | "uint" => true,
-                    "bool" => false,
-                    x => {
-                        exit_with_message(format!("Cannot cast type '{}' to 'double'", x));
-                        unreachable!();
-                    },
+                    _ => false,
                 }
             }
 
             "float" => {
                 match from {
                     "int" | "uint" => true,
-                    "bool" => false,
-                    x => {
-                        exit_with_message(format!("Cannot cast type '{}' to 'float'", x));
-                        unreachable!();
-                    },
+                    _ => false,
                 }
             }
 
             "int" => {
                 match from {
                     "uint" => true,
-                    "bool" | "float" => false,
-                    x => {
-                        exit_with_message(format!("Cannot cast type '{}' to 'int'", x));
-                        unreachable!();
-                    },
+                    _ => false,
                 }
             }
 
             "uint" => {
                 match from {
                     "int" => true,
-                    "bool" => false,
-                    x => {
-                        exit_with_message(format!("Cannot cast type '{}' to 'uint'", x));
-                        unreachable!();
-                    },
+                    _ => false,
                 }
             }
 
             "bool" => {
                 match from {
                     "double" | "fload" | "int" | "uint" => false,
-                    x => {
-                        exit_with_message(format!("Cannot cast type '{}' to 'bool'", x));
-                        unreachable!();
-                    }
+                    _ => false,
                 }
             }
 
@@ -324,7 +336,7 @@ impl Context {
     }
 
     pub fn multiply_type(&self, left_type: &str, right_type: &str) -> String {
-        // FIXME: Is it exactly the same?
+        // TODO: Is it exactly the same?
         self.add_type(left_type, right_type)
     }
 
@@ -354,7 +366,6 @@ impl Context {
             type_name
         } else {   
             exit_with_message(format!("Error: Unknown or undeclared type '{}'", type_name));
-            // Process exits before this, so no return is needed
             unreachable!();
         }
     }
@@ -388,7 +399,7 @@ impl Context {
             }
 
             ast::Expression::Identifier(name) => {
-                self.var_type(name.to_owned())
+                self.scopes.var_type(name)
             }
 
             ast::Expression::Binary {ty, ..} => {

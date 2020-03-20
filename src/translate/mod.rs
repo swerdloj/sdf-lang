@@ -41,7 +41,7 @@ pub fn translate(ast: &AST, context: &crate::parse::context::Context) -> String 
             }
 
             Item::Scene { name, statements } => {
-                glsl.push_str(&template::scene(name));
+                glsl.push_str(&template::scene(name, statements));
             }
         }
     }

@@ -2,6 +2,7 @@ use crate::parse::ast::*;
 use crate::exit_with_message;
 
 
+// TODO: Assign uniforms their default value (type checked)
 pub fn uniforms(uniforms: &std::collections::HashSet<(String, String)>) -> String {
     let mut glsl = String::new();
 
@@ -43,14 +44,22 @@ pub fn function(name: &str, parameters: &Vec<(String, String)>, return_type: &st
     }
 
     // Remove trailing ", "
-    if parameters.len() > 0 {
-        param_string.pop();
-        param_string.pop();
-    }
+    param_string.pop();
+    param_string.pop();
 
     glsl.push_str(&format!("{} {}({}) {{\n", return_type, name, param_string));
 
     for nested_statement in statements {
+        // Tagged variables are placed in global scope (required by GLSL)
+        match nested_statement {
+            Statement::Let { tag, .. } => {
+                if let Some(_tag) = tag {
+                    continue;
+                }
+            }
+            _ => {},
+        }
+
         glsl.push_str(&format!("\t{}", statement(nested_statement)));
     }
 
@@ -60,7 +69,10 @@ pub fn function(name: &str, parameters: &Vec<(String, String)>, return_type: &st
 }
 
 // TODO: This
-pub fn scene(name: &str) -> String {
+// 
+//       Scenes will need special scope treatment, as they introduce
+//       SDF functions and types
+pub fn scene(name: &str, statements: &Vec<Statement>) -> String {
     let mut glsl = String::new();
     
     glsl.push_str(&format!("RayResult __scene__{}(vec3 point) {{\n", name));
@@ -83,7 +95,8 @@ pub fn statement(statement: &Statement) -> String {
             }
         }
 
-        Statement::Let { ident, tag, ty, expression: expr } => {
+        // TODO: Tagged variables should not be re-included here (handled elsewhere for global scope)
+        Statement::Let { ident, ty, expression: expr, .. } => {           
             if ty.is_none() {
                 exit_with_message(format!("The type of '{}' could not be determined. Consider annotating the type.", ident));
             }

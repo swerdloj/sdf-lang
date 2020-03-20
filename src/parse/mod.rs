@@ -68,6 +68,10 @@ mod parser_test {
     #[test]
     fn expression_integration() {
        test_input("
+                struct Type {
+                    field1: int,
+                }
+
                 scene main {
                     let x = 2 + 3;
 
@@ -77,94 +81,6 @@ mod parser_test {
                         field1: (x * y) - 4,
                     };
                 }
-        ");
-    }
-
-    #[test]
-    fn raw_expressions() {
-       test_input("
-            scene main {
-                1 / -x + 2 != 7 * 1 - (3 / 4) ;
-            }
-        ");
-    }
-
-    #[test]
-    fn comments() {
-       test_input("
-            /*
-            struct commented_out {
-                field1: value1 = default,
-                field2: no_default,
-            }
-            stuff in comment here
-            */
-
-            /* Same line */
-
-            // Comment here
-
-            scene main {
-                let box: Box {
-                    field1: value1,
-                    field2: value2,
-                };
-                let x = 7;
-                let y = x; // Another comment
-            }
-        ");
-    }
-
-    #[test]
-    fn struct_function_scene_and_constructor() {
-       test_input("
-            struct something {
-                field1: int = 12,
-                field2: float,
-            }
-
-            scene main {
-                let box: Box {
-                    field1: 1,
-                    field2: 1,
-                };
-                let x = 7;
-                let y = x;
-            }
-
-            fn function() {
-                statements;
-            }
-        ");
-    }
-
-    #[test]
-    fn expression_statement() {
-       test_input("
-            scene main {
-                expression_as_statement;
-            }
-        ");
-    }
-
-    #[test]
-    fn let_statement() {
-       test_input("
-            scene main {
-                let x = 1;
-            }
-        ");
-    }
-
-    #[test]
-    fn let_constructor() {
-       test_input("
-            scene main {
-                let x: y { 
-                    f1: 1, 
-                    f2: 2,
-                };
-            }
         ");
     }
 }
