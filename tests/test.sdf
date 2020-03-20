@@ -6,6 +6,7 @@
 struct SomeStruct {
     field1: float = 2.3,
     no_default: int,
+    another_default: int = 123,
     no_final_comma: int = 9,
 }
 
@@ -45,6 +46,7 @@ fn constructors() {
 
     // Constructors are automatically ordered and defaults are filled in (if not supplied)
     let some_struct: SomeStruct {
+        another_default: 321,
         no_default: 7 + 3 - int_function(),
         field1: 12,
     };
@@ -57,12 +59,17 @@ fn bool_function() -> bool {
 }
 
 fn if_expressions() {
-    let x = 12;
+    let x: int = 12;
     let y = 12;
 
     if x == y {
-        x += 1;
+        let nested = 12;
+        // Shadowing
+        let x = 5;
+        x += nested;
     } else if true {
+        // Now out of scope
+        // nested += 5;
         x -= 1;
     } else if false {
         false;

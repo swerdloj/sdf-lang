@@ -49,7 +49,7 @@ impl Scope {
     }
 
     pub fn add_var_to_scope(&mut self, name: String, ty: String) {
-        // println!("Adding '{}' to {}", &name, self.current);
+        // println!("Adding '{}' to nested scope {}", &name, self.current);
         if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), ty) {
             exit_with_message(format!("Error: Variables '{}' already exists in the current scope", name));
         }
@@ -86,6 +86,7 @@ pub struct Context {
     primitive_types: HashSet<&'static str>,
     /// Collection of user-declared uniforms, their types, and defaults
     // TODO: Default value is not implemented yet
+    // TODO: Implement the scope for tagged variables (and allow shadowing?)
     uniforms: HashSet<(String, String, /* DEFAULT VALUE HERE */)>,
     outs: HashSet<(String, String, /* DEFAULT VALUE HERE */)>,
 
