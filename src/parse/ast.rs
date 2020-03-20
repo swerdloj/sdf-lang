@@ -43,13 +43,29 @@ pub enum Expression {
         parameters: Vec<Expression>,
         ty: String,
     },
+    If {
+        expression: Box<Expression>,
+        if_block: Vec<Statement>,
+        else_block: Option<Vec<Statement>>,
+        else_if_block: Option<Box<Expression>>,
+        ty: String,
+    },
     // Cast {
     //     from: String,
     //     to: String,
     // }
 }
 
-#[derive(Debug)]
+// #[derive(Debug, Clone)]
+// pub struct If {
+//     expression: Expression,
+//     if_block: Vec<Statement>,
+//     else_block: Option<Vec<Statement>>,
+//     else_if_block: Option<Expression>,
+//     pub ty: String,
+// }
+
+#[derive(Debug, Clone)]
 pub struct Constructor {
     pub ty: String,
     pub fields: Vec<(String, Expression)>,
@@ -81,7 +97,7 @@ pub enum UnaryOperator {
     Not,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AssignmentOperator {
     Assign,
     AddAssign,
@@ -90,7 +106,7 @@ pub enum AssignmentOperator {
     DivideAssign,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Statement {
     Let {
         ident: String,
@@ -113,7 +129,7 @@ pub enum Statement {
     Expression(Expression),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A tag identifies variables which require CPU initialization or modification
 pub enum Tag {
     Uniform,

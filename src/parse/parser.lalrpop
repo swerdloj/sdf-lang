@@ -1,7 +1,7 @@
 use crate::parse::{context::Context, ast};
 use crate::exit_with_message;
 
-grammar(context: &mut Context);
+grammar();
 
 
 match {
@@ -55,7 +55,7 @@ Function: ast::Item = {
             "void".to_owned()
         };
 
-        context.declare_function(name.clone(), params.clone(), ret.clone());
+        // context.declare_function(name.clone(), params.clone(), ret.clone());
 
         // context.scopes.pop_scope();
 
@@ -87,7 +87,7 @@ FunctionParams: Vec<(String, String)> = {
 
 Struct: ast::Item = {
     "struct" <name:Ident> "{" <fields:(StructFields)> "}" => {
-        context.declare_struct(name.clone(), fields.clone());
+        // context.declare_struct(name.clone(), fields.clone());
         
         ast::Item::Struct {
             name,
@@ -125,6 +125,7 @@ Statement: ast::Statement = {
     AssignmentStatement => <>,
 
     <Expression> ";" => ast::Statement::Expression(<>),
+    <IfExpr> => ast::Statement::Expression(<>),
 }
 
 StatementBlock: Vec<ast::Statement> = {
@@ -132,7 +133,7 @@ StatementBlock: Vec<ast::Statement> = {
         // TODO: This doesn't account for scopes properly because it is called *after*
         //          variables are declared
         // TODO: Also, don't know where to pop the scope for same reason
-        context.scopes.push_scope();
+        // context.scopes.push_scope();
 
         statements
     },
@@ -140,14 +141,14 @@ StatementBlock: Vec<ast::Statement> = {
 
 AssignmentStatement: ast::Statement = {
     <id:Ident> <op:AssignmentOperator> <expr:Expression> ";" => {
-        if !context.scopes.is_var_in_scope(&id) {
-            exit_with_message(format!("Error: No such variable in scope: '{}'", &id));
-        }
+        // if !context.scopes.is_var_in_scope(&id) {
+        //     exit_with_message(format!("Error: No such variable in scope: '{}'", &id));
+        // }
         
-        let expr_type = context.expression_type(&expr);
-        if !Context::castable(&expr_type, &context.scopes.var_type(&id)) {
-            exit_with_message(format!("Error: Variable '{}' cannot be assigned to incompatible type '{}'", &id, &expr_type));
-        }
+        // let expr_type = context.expression_type(&expr);
+        // if !Context::castable(&expr_type, &context.scopes.var_type(&id)) {
+        //     exit_with_message(format!("Error: Variable '{}' cannot be assigned to incompatible type '{}'", &id, &expr_type));
+        // }
 
         ast::Statement::Assignment {
             ident: id,
@@ -161,75 +162,75 @@ LetStatement: ast::Statement = {
     <tag:("@" <Tag>)?>
     "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => {              
         // Tagged variables must have specified type and initial value
-        if let Some(ref t) = tag {
-            if ty.is_none() {
-                exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but its type was not specified", id, t));
-                unreachable!();
-            }
+        // if let Some(ref t) = tag {
+        //     if ty.is_none() {
+        //         exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but its type was not specified", id, t));
+        //         unreachable!();
+        //     }
 
-            if expr.is_none() {
-                exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but not initialized", id, t));
-                unreachable!();
-            }
+        //     if expr.is_none() {
+        //         exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but not initialized", id, t));
+        //         unreachable!();
+        //     }
 
-            match t {
-                ast::Tag::Uniform => {
-                    context.declare_uniform(id.clone(), ty.clone().unwrap());
-                }
+        //     match t {
+        //         ast::Tag::Uniform => {
+        //             context.declare_uniform(id.clone(), ty.clone().unwrap());
+        //         }
 
-                _ => {
-                    unimplemented!();
-                }
-            }
-        }
+        //         _ => {
+        //             unimplemented!();
+        //         }
+        //     }
+        // }
 
         // Hack because 'ty' is immutable
-        let checked_type = if let Some(specified_type) = ty {
-            // Check whether type assigned is compatible with user-specified
-            if let Some(assignment) = &expr {
-                let assigned_type = context.expression_type(assignment);
-                if !Context::castable(&assigned_type, &specified_type) {
-                    exit_with_message(format!("Error: Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
-                                               &id, &specified_type, &assigned_type));
-                    unreachable!();
-                }
-            }
-            Some(specified_type)
-        } else {
-            // Make sure inferred type is valid (not void like a void function call)
-            if let Some(assignment) = &expr {
-                let expr_type = context.expression_type(&assignment);
-                if expr_type != "void" {
-                    Some(expr_type)
-                } else {
-                    exit_with_message(format!("Error: Variable '{}' was assigned type 'void'.", &id));
-                    unreachable!();
-                }
-            } else {
-                None
-            }
-        };
+        // let checked_type = if let Some(specified_type) = ty {
+        //     // Check whether type assigned is compatible with user-specified
+        //     if let Some(assignment) = &expr {
+        //         let assigned_type = context.expression_type(assignment);
+        //         if !Context::castable(&assigned_type, &specified_type) {
+        //             exit_with_message(format!("Error: Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
+        //                                        &id, &specified_type, &assigned_type));
+        //             unreachable!();
+        //         }
+        //     }
+        //     Some(specified_type)
+        // } else {
+        //     // Make sure inferred type is valid (not void like a void function call)
+        //     if let Some(assignment) = &expr {
+        //         let expr_type = context.expression_type(&assignment);
+        //         if expr_type != "void" {
+        //             Some(expr_type)
+        //         } else {
+        //             exit_with_message(format!("Error: Variable '{}' was assigned type 'void'.", &id));
+        //             unreachable!();
+        //         }
+        //     } else {
+        //         None
+        //     }
+        // };
 
-        context.scopes.add_var_to_scope(id.clone(), checked_type.clone().unwrap());
+        // context.scopes.add_var_to_scope(id.clone(), checked_type.clone().unwrap());
 
         ast::Statement::Let {
             ident: id.to_owned(),
             tag,
-            ty: checked_type,
+            ty,
             expression: expr,
         }
     },
 
     // let identifier: type { param1: value1, param2: value2, ...};
     "let" <id:Ident> ":" <ty:Ident> "{" <fields:(ConstructorArgs)> "}" ";" => {
-        context.scopes.add_var_to_scope(id.clone(), ty.clone());
+        // context.scopes.add_var_to_scope(id.clone(), ty.clone());
         
         // Fields are properly ordered and defaults are filled in here
         ast::Statement::LetConstructor {
             ident: id.to_owned(),
             constructor: ast::Constructor {
                 ty: ty.clone(),
-                fields: context.generate_constructor(&ty, fields),
+                fields, //: context.generate_constructor(&ty, fields),
             },
         }
     },
@@ -265,17 +266,45 @@ FunctionCall: ast::Expression = {
             params.push(param);
         }
 
-        let ty = context.check_function_call(
-            &name, 
-            params.iter().map(|expr| context.expression_type(&expr)).collect()
-        );
+        // let ty = context.check_function_call(
+        //     &name, 
+        //     params.iter().map(|expr| context.expression_type(&expr)).collect()
+        // );
 
         ast::Expression::FunctionCall {
             name,
             parameters: params,
-            ty,
+            ty: "temp".to_owned(),
         }
     }
+}
+
+IfExpr: ast::Expression = {
+    // if .. else ..
+    "if" <expr:BooleanExpr> <statements:StatementBlock> 
+    <else_block:("else" <StatementBlock>)?>
+    => {
+        ast::Expression::If {
+            expression: Box::new(expr),
+            if_block: statements,
+            else_block,
+            else_if_block: None,
+            ty: "temp".to_owned(),
+        }
+    },
+
+    // if .. else if ..
+    "if" <expr:BooleanExpr> <statements:StatementBlock> 
+    <else_if_block:("else" <IfExpr>)>
+    => {
+        ast::Expression::If {
+            expression: Box::new(expr),
+            if_block: statements,
+            else_block: None,
+            else_if_block: Some(Box::new(else_if_block)),
+            ty: "temp".to_owned(),
+        }
+    },
 }
 
 // Fourth precedence - left associativity
@@ -294,15 +323,15 @@ BooleanExpr: ast::Expression = {
 // Third precedence - left associativity
 AdditiveExpr: ast::Expression = {
     <lhs:AdditiveExpr> <op:AddOp> <rhs:MultiplicativeExpr> => {
-        let ty = context.add_type(
-            &context.expression_type(&lhs), &context.expression_type(&rhs)
-        );
+        // let ty = context.add_type(
+        //     &context.expression_type(&lhs), &context.expression_type(&rhs)
+        // );
 
         ast::Expression::Binary {
             lhs: Box::new(lhs),
             operator: op,
             rhs: Box::new(rhs),
-            ty,
+            ty: "temp".to_owned(),
         }
     },
 
@@ -312,15 +341,15 @@ AdditiveExpr: ast::Expression = {
 // Second precedence - left associativity
 MultiplicativeExpr: ast::Expression = {
     <lhs:MultiplicativeExpr> <op:MultOp> <rhs:BaseExpr> => {
-        let ty = context.multiply_type(
-            &context.expression_type(&lhs), &context.expression_type(&rhs)
-        );
+        // let ty = context.multiply_type(
+        //     &context.expression_type(&lhs), &context.expression_type(&rhs)
+        // );
 
         ast::Expression::Binary {
             lhs: Box::new(lhs),
             operator: op,
             rhs: Box::new(rhs),
-            ty,
+            ty: "temp".to_owned(),
         }
     },
 
@@ -340,27 +369,27 @@ BaseExpr: ast::Expression = {
     FunctionCall => <>,
 
     "-" <BaseExpr> => {
-        let ty = context.expression_type(&<>);
+        // let ty = context.expression_type(&<>);
 
         ast::Expression::Unary {
             operator: ast::UnaryOperator::Negate,
             rhs: Box::new(<>),
-            ty: context.negate_type(&ty),
+            ty: "temp".to_owned(), //context.negate_type(&ty),
         }
     },
 
     "!" <BaseExpr> => {
-        let ty = context.expression_type(&<>);
+        // let ty = context.expression_type(&<>);
 
-        // The "!" operator works only on bools
-        if ty != "bool" {
-            exit_with_message(format!("The binary not cannot be used on type '{}'", &ty));
-        }
+        // // The "!" operator works only on bools
+        // if ty != "bool" {
+        //     exit_with_message(format!("The binary not cannot be used on type '{}'", &ty));
+        // }
 
         ast::Expression::Unary {
             operator: ast::UnaryOperator::Not,
             rhs: Box::new(<>),
-            ty,
+            ty: "temp".to_owned(),
         }
     },
 }
@@ -402,7 +431,12 @@ BoolOp: ast::BinaryOperator = {
 // ---------------- IDENTIFIER, LITERAL, TAG ----------------
 
 Ident: String = {
-    <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => <>.to_owned(),
+    <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => {
+        if <>.len() >= 3 && <>[0..=2].to_owned() == "gl_".to_owned() {
+            exit_with_message(format!("Error: The identifier prefix 'gl_' is reserved (used in '{}')", <>));
+        }
+        <>.to_owned()
+    },
 }
 
 #[inline]

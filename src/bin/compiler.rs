@@ -15,9 +15,11 @@ fn main() -> Result<(), std::io::Error> {
     let mut context = parse::context::Context::new();
 
     // Print any parse errors, then exit. Otherwise, return AST
-    let ast = parse::parse(&input, &mut context).map_err(|e| 
+    let mut ast = parse::parse(&input).map_err(|e| 
         exit_with_message(format!("Parse Error: {}", e)) 
     ).unwrap();
+
+    translate::translate_top_down(&mut ast, &mut context);
 
     // Write AST to a file
     if env.save_ast {

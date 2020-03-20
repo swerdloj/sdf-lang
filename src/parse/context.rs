@@ -86,7 +86,8 @@ pub struct Context {
     primitive_types: HashSet<&'static str>,
     /// Collection of user-declared uniforms, their types, and defaults
     // TODO: Default value is not implemented yet
-    uniforms: HashSet<(String, String /*, DEFAULT VALUE HERE */)>,
+    uniforms: HashSet<(String, String, /* DEFAULT VALUE HERE */)>,
+    outs: HashSet<(String, String, /* DEFAULT VALUE HERE */)>,
 
     pub scopes: Scope,
 }
@@ -111,18 +112,25 @@ impl Context {
         // see http://www.shaderific.com/glsl-functions
         let functions = HashMap::new();
         
+        // TODO: Insert default functions (need special mechanism for overloading?)
         // functions.insert("length", FunctionSignature{name: "length", ..}, "float");
 
+        // TODO: HashSet does not save insertion order. This is probably not an issue, but look into it.
         let mut uniforms = HashSet::new();
         uniforms.insert(("time".to_owned(), "int".to_owned()));
-        // uniforms.push(("window_size".to_owned(), "vec2".to_owned(), ??));
-        // uniforms.push(("mouse_position".to_owned(), "vec2".to_owned(), ??));
+        uniforms.insert(("window_size".to_owned(), "vec2".to_owned()));
+        uniforms.insert(("mouse_position".to_owned(), "vec2".to_owned()));
+
+        // FIXME: This MUST be in out location 0 (must save this order)
+        let mut outs = HashSet::new();
+        outs.insert(("out_color".to_owned(), "float".to_owned()));
 
         Context {
             functions,
             structs: HashMap::new(),
             primitive_types,
             uniforms,
+            outs,
             scopes: Scope::new(),
         }
     }
@@ -135,6 +143,16 @@ impl Context {
 
     pub fn uniforms(&self) -> &HashSet<(String, String)> {
         &self.uniforms
+    }
+    
+    pub fn declare_out(&mut self, name: String, ty: String /*, initial_value: ?? */) {
+        if !self.outs.insert((name.clone(), ty)) {
+            exit_with_message(format!("Error: Out '{}' was already declared", &name));
+        }
+    }
+    
+    pub fn outs(&self) -> &HashSet<(String, String)> {
+        &self.outs
     }
 
     pub fn declare_struct(&mut self, name: String, fields: Vec<(String, String, Option<ast::Expression>)>) {       
@@ -411,6 +429,10 @@ impl Context {
             }
 
             ast::Expression::FunctionCall {ty, ..} => {
+                ty.clone()
+            }
+
+            ast::Expression::If{ ty, .. } => {
                 ty.clone()
             }
         }
