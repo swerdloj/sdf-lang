@@ -63,15 +63,14 @@ impl Environment {
         loop {
             match args[index].as_str() {
                 "--help" => {
-                    exit_with_message(format!(
-                             "sdf-lang compiler usage:\n
-                              --help\t\tDisplay this message\n
-                              --input PATH\tSpecify the input file path\n
-                              --output PATH\tSpecify the output file path. Only specify the file to store in /output/FILE\n
-                              --AST\t\tSave the AST to text file in output directory
-                              "
-                            )
-                        );
+                    exit_with_message(
+            format!(
+            "sdf-lang compiler usage:\n
+            --help\t\tDisplay this message\n
+            --input PATH\tSpecify the input file path\n
+            --output PATH\tSpecify the output file path. Only specify the file to store in /output/FILE\n
+            --AST\t\tSave the AST to text file in output directory
+             "));
                 }
 
                 "--input" => {

@@ -20,7 +20,12 @@ pub enum Item {
         name: String,
         // "field: type = optional_default,"
         fields: Vec<(String, String, Option<Expression>)>,
-    }
+    },
+    Implementation {
+        struct_name: String,
+        // Contains only functions with references to `self`
+        functions: Vec<Item>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -50,20 +55,7 @@ pub enum Expression {
         else_if_block: Option<Box<Expression>>,
         ty: String,
     },
-    // Cast {
-    //     from: String,
-    //     to: String,
-    // }
 }
-
-// #[derive(Debug, Clone)]
-// pub struct If {
-//     expression: Expression,
-//     if_block: Vec<Statement>,
-//     else_block: Option<Vec<Statement>>,
-//     else_if_block: Option<Expression>,
-//     pub ty: String,
-// }
 
 #[derive(Debug, Clone)]
 pub struct Constructor {
@@ -79,7 +71,8 @@ pub enum BinaryOperator {
     Multiply,
     Divide,
 
-    // AsCast,
+    Cast,
+    Member,
 
     EqualTo,
     NotEqualTo,

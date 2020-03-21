@@ -9,7 +9,7 @@ The following items are not yet implemented
 - `sampler` types
 - Arrays
 ### Expressions
-- `if`/`else`
+- `if`/`else` as expressions with return types
 - `match`
 - Constructors
 ### Statements
@@ -19,11 +19,11 @@ The following items are not yet implemented
 - `break`
 - `continue`
 ### Structs
-- `impl` functions
+- member field access
+- member function calling
 
 ## **Translator**
 - Type inferrence
-- Type casting
 - Scenes
 
 ## **Runtime**

@@ -19,7 +19,7 @@ fn main() -> Result<(), std::io::Error> {
         exit_with_message(format!("Parse Error: {}", e)) 
     ).unwrap();
 
-    translate::translate_top_down(&mut ast, &mut context);
+    translate::validate(&mut ast, &mut context);
 
     // Write AST to a file
     if env.save_ast {

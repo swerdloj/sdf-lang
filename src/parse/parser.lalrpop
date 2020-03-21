@@ -31,6 +31,7 @@ pub AST: ast::AST = {
 // An AST is composed of Items
 Item: ast::Item = {
     Function => <>,
+    Implementation => <>,
     Scene => <>,
     Struct => <>,
 }
@@ -42,6 +43,19 @@ Scene: ast::Item = {
 }
 
 // ---------------- FUNCTION ----------------
+
+Implementation: ast::Item = {
+    "impl" <id:Ident> "{" <functions:Function*> "}" => {
+        if functions.len() == 0 {
+            exit_with_message(format!("Error: To implement '{}', at least one function is needed", &id));
+        }
+
+        ast::Item::Implementation {
+            struct_name: id,
+            functions,
+        }
+    }
+}
 
 Function: ast::Item = {
     "fn" <name:Ident> <params:FunctionParams> <return_type:("->" <Ident>)?> <s:StatementBlock> 
@@ -63,10 +77,27 @@ Function: ast::Item = {
 
 #[inline]
 FunctionParams: Vec<(String, String)> = {
-    "(" <multi:(<Ident> ":" <Ident> ",")*> 
+    "(" <self_single:(Ident)?>
+        <self_comma:(<Ident> ",")?>
+        <multi:(<Ident> ":" <Ident> ",")*> 
         <single:(<Ident> ":" <Ident>)?> ")" 
     => {
-        let mut params = multi;
+        let mut params = Vec::new();
+        
+        // FIXME: This whole thing is ugly, but it works
+        if let Some(s) = self_single {
+            if s != "self" {
+                exit_with_message(format!("Error: TODO: not 'self'"));
+            }
+            params.push(("self".to_owned(), "self".to_owned())); 
+        } else if let Some(sc) = self_comma {
+            if "sc" != "self" {
+                exit_with_message(format!("Error: TODO: not 'self'"));
+            }
+            params.push(("self".to_owned(), "self".to_owned())); 
+        }
+
+        params.extend_from_slice(&multi[0..]);
         
         if let Some(param) = single {
             params.push(param);
@@ -126,6 +157,7 @@ StatementBlock: Vec<ast::Statement> = {
     },
 }
 
+// TODO: Allow member field assignment (with dot operator)
 AssignmentStatement: ast::Statement = {
     <id:Ident> <op:AssignmentOperator> <expr:Expression> ";" => {
         ast::Statement::Assignment {
@@ -138,7 +170,11 @@ AssignmentStatement: ast::Statement = {
     
 LetStatement: ast::Statement = {
     <tag:("@" <Tag>)?>
-    "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => {              
+    "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => { 
+        if ty.is_none() && expr.is_none() {
+            exit_with_message(format!("Error: Standalone let statements like 'let {};' are not yet implemented", &id));
+        }
+        
         ast::Statement::Let {
             ident: id.to_owned(),
             tag,
@@ -225,9 +261,10 @@ IfExpr: ast::Expression = {
     },
 }
 
-// Fourth precedence - left associativity
+// Fifth precedence - left associativity
 // Note that `BooleanExpr`s are always of type "bool" 
 BooleanExpr: ast::Expression = {
+    // TODO: Create more precedences: https://en.cppreference.com/w/cpp/language/operator_precedence
     <lhs:BooleanExpr> <op:BoolOp> <rhs:AdditiveExpr> => ast::Expression::Binary {
         lhs: Box::new(lhs),
         operator: op,
@@ -238,7 +275,7 @@ BooleanExpr: ast::Expression = {
     AdditiveExpr => <>,
 }
 
-// Third precedence - left associativity
+// Fourth precedence - left associativity
 AdditiveExpr: ast::Expression = {
     <lhs:AdditiveExpr> <op:AddOp> <rhs:MultiplicativeExpr> => {
         ast::Expression::Binary {
@@ -252,9 +289,23 @@ AdditiveExpr: ast::Expression = {
     MultiplicativeExpr => <>,
 }
 
-// Second precedence - left associativity
+// Third precedence - left associativity
 MultiplicativeExpr: ast::Expression = {
-    <lhs:MultiplicativeExpr> <op:MultOp> <rhs:BaseExpr> => {
+    <lhs:MultiplicativeExpr> <op:MultOp> <rhs:CastExpr> => {
+        ast::Expression::Binary {
+            lhs: Box::new(lhs),
+            operator: op,
+            rhs: Box::new(rhs),
+            ty: "temp".to_owned(),
+        }
+    },
+
+    CastExpr => <>,
+}
+
+// Second precedence - left associativity
+CastExpr: ast::Expression = {
+    <lhs:CastExpr> <op:CastOp> <rhs:BaseExpr> => {
         ast::Expression::Binary {
             lhs: Box::new(lhs),
             operator: op,
@@ -266,6 +317,7 @@ MultiplicativeExpr: ast::Expression = {
     BaseExpr => <>,
 }
 
+// TODO: Keep parenthesis around expressions when translating
 // First precedence - right associativity (for unary ops)
 BaseExpr: ast::Expression = {
     "(" <Expression> ")" => <>,
@@ -296,6 +348,12 @@ BaseExpr: ast::Expression = {
 }
 
 #[inline]
+CastOp: ast::BinaryOperator = {
+    "." => ast::BinaryOperator::Member,
+    "as" => ast::BinaryOperator::Cast,
+}
+
+#[inline]
 AssignmentOperator: ast::AssignmentOperator = {
     "=" => ast::AssignmentOperator::Assign,
     "+=" => ast::AssignmentOperator::AddAssign,
@@ -306,7 +364,6 @@ AssignmentOperator: ast::AssignmentOperator = {
 
 #[inline]
 MultOp: ast::BinaryOperator = {
-    // "as" => ast::BinaryOperator::AsCast,
     "*" => ast::BinaryOperator::Multiply,
     "/" => ast::BinaryOperator::Divide,
 }
@@ -335,7 +392,10 @@ Ident: String = {
     <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => {
         if <>.len() >= 3 && <>[0..=2].to_owned() == "gl_".to_owned() {
             exit_with_message(format!("Error: The identifier prefix 'gl_' is reserved (used in '{}')", <>));
-        }
+        } 
+        
+        // TODO: Reserve "__ident__..." for code generation
+
         <>.to_owned()
     },
 }

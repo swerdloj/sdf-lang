@@ -51,7 +51,7 @@ impl Scope {
     pub fn add_var_to_scope(&mut self, name: String, ty: String) {
         // println!("Adding '{}' to nested scope {}", &name, self.current);
         if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), ty) {
-            exit_with_message(format!("Error: Variables '{}' already exists in the current scope", name));
+            exit_with_message(format!("Error: Variable '{}' already exists in the current scope", name));
         }
     }
 
@@ -136,6 +136,10 @@ impl Context {
         }
     }
 
+    pub fn is_primitive(&self, type_name: &str) -> bool {
+        self.primitive_types.contains(type_name)
+    }
+
     pub fn declare_uniform(&mut self, name: String, ty: String /*, initial_value: ?? */) {
         if !self.uniforms.insert((name.clone(), ty)) {
             exit_with_message(format!("Error: Uniform '{}' was already declared", &name));
@@ -160,7 +164,7 @@ impl Context {
         let signature = StructSignature {
             name: name.clone(),
             fields: fields.iter().map(|(field, ty, default)|
-                        ( field.clone(), self.validate_type(ty.clone()), default.clone() )
+                        ( field.clone(), self.validate_type(ty), default.clone() )
                     ).collect(),
         };
 
@@ -218,7 +222,7 @@ impl Context {
         let signature = FunctionSignature {
             name: name.clone(),
             parameters: parameters.iter().map(|(field, ty)| 
-                            ( field.clone(), self.validate_type(ty.clone()) ) 
+                            ( field.clone(), self.validate_type(ty) ) 
                         ).collect(),
             return_type: ty,
         };
@@ -380,9 +384,9 @@ impl Context {
 
     /// Returns type_name if it is a valid, previously declared type.
     /// Otherwise, prints error and exits
-    pub fn validate_type(&self, type_name: String) -> String {
-        if self.primitive_types.contains(type_name.as_str()) || self.structs.contains_key(&type_name) {
-            type_name
+    pub fn validate_type(&self, type_name: &str) -> String {
+        if self.primitive_types.contains(type_name) || self.structs.contains_key(type_name) {
+            type_name.to_owned()
         } else {   
             exit_with_message(format!("Error: Unknown or undeclared type '{}'", type_name));
             unreachable!();

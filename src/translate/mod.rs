@@ -10,7 +10,7 @@ use crate::parse::context::Context;
 // to account for
 //
 // Note that nested items are translated recursively (for bottom-up analysis like expressions)
-pub fn translate_top_down(ast: &mut AST, context: &mut Context) -> () {
+pub fn validate(ast: &mut AST, context: &mut Context) -> () {
     for item in ast {
         match item {
             Item::Struct { name, fields } => {
@@ -19,16 +19,55 @@ pub fn translate_top_down(ast: &mut AST, context: &mut Context) -> () {
 
             // TODO: Ensure that return statement has same type as function
             // TODO: Ensure that typed functions *have* a return statement
-            Item::Function { name, parameters, return_type, statements } => {
+            Item::Function { name, parameters, return_type, statements } => {               
                 context.declare_function(name.clone(), parameters.clone(), return_type.clone());
 
                 context.scopes.push_scope();
 
+                for (param_name, param_type) in parameters {
+                    context.scopes.add_var_to_scope(param_name.clone(), param_type.clone());
+                }
+
                 for statement in statements {
-                    translate_statement(statement, context);
+                    validate_statement(statement, context);
                 }
 
                 context.scopes.pop_scope();
+            }
+
+            // TODO: 'self' parameter should be marked as 'inout'
+            Item::Implementation { struct_name, functions  } => {
+                context.validate_type(struct_name);
+
+                for function in functions {
+                    match function {
+                        Item::Function { name, parameters, return_type, statements } => {
+                            if parameters.len() > 0 {
+                                parameters[0] = ("self".to_owned(), format!("{}", struct_name));
+                            } else {
+                                exit_with_message(format!("Error: Implementation function '{}.{}' must reference 'self'", struct_name, name));
+                            }
+
+                            // Memeber functions are represented like so in GLSL
+                            *name = format!("__{}__{}", struct_name, name);
+                            
+                            context.declare_function(name.to_owned(), parameters.clone(), return_type.clone());
+                            
+                            context.scopes.push_scope();
+
+                            for (param_name, param_type) in parameters {
+                                context.scopes.add_var_to_scope(param_name.clone(), param_type.clone());
+                            }
+
+                            for statement in statements {
+                                validate_statement(statement, context);
+                            }
+
+                            context.scopes.pop_scope();
+                        }
+                        _ => {}
+                    }
+                }
             }
 
             Item::Scene { name, statements } => {
@@ -38,11 +77,11 @@ pub fn translate_top_down(ast: &mut AST, context: &mut Context) -> () {
     }
 }
 
-fn translate_statement(statement: &mut Statement, context: &mut Context) {
+fn validate_statement(statement: &mut Statement, context: &mut Context) {
     match statement {
         Statement::Let { ident, tag, ty, expression } => {
             if let Some(assignment) = expression {
-                translate_expression(assignment, context);
+                validate_expression(assignment, context);
             }
             
             // Tagged variables must have specified type and initial value
@@ -101,7 +140,7 @@ fn translate_statement(statement: &mut Statement, context: &mut Context) {
             context.scopes.add_var_to_scope(ident.clone(), constructor.ty.clone());
             
             for (_ident, field) in &mut constructor.fields {
-                translate_expression(field, context);
+                validate_expression(field, context);
             }
             
             // Order the fields and fill in defaults
@@ -113,7 +152,7 @@ fn translate_statement(statement: &mut Statement, context: &mut Context) {
                 exit_with_message(format!("Error: No such variable in scope: '{}'", ident));
             }
 
-            translate_expression(expression, context);
+            validate_expression(expression, context);
 
             let expr_type = context.expression_type(expression);
             if !Context::castable(&expr_type, &context.scopes.var_type(ident)) {
@@ -123,23 +162,23 @@ fn translate_statement(statement: &mut Statement, context: &mut Context) {
 
         Statement::Return { expression } => {
             if let Some(expr) = expression {
-                translate_expression(expr, context);
+                validate_expression(expr, context);
             }
         }
 
         Statement::Expression(expr) => {
-            translate_expression(expr, context);
+            validate_expression(expr, context);
         }
     }
 }
 
-fn translate_expression(expression: &mut Expression, context: &mut Context) {
+fn validate_expression(expression: &mut Expression, context: &mut Context) {
     match expression {
         Expression::FunctionCall { name, parameters, ty } => {
             let mut param_types = Vec::new();
             
             for param in parameters {
-                translate_expression(param, context);
+                validate_expression(param, context);
                 param_types.push(context.expression_type(param));
             }
             
@@ -149,7 +188,7 @@ fn translate_expression(expression: &mut Expression, context: &mut Context) {
         }
 
         Expression::Unary { operator, rhs, ty } => {
-            translate_expression(rhs, context);
+            validate_expression(rhs, context);
 
             match operator {
                 UnaryOperator::Negate => {
@@ -166,8 +205,8 @@ fn translate_expression(expression: &mut Expression, context: &mut Context) {
         }
 
         Expression::Binary { lhs, operator, rhs, ty } => {
-            translate_expression(lhs, context);
-            translate_expression(rhs, context);
+            validate_expression(lhs, context);
+            validate_expression(rhs, context);
 
             match operator {
                 // TODO: Some operators like "&&" require lhs and rhs to both be boolean
@@ -178,7 +217,7 @@ fn translate_expression(expression: &mut Expression, context: &mut Context) {
                 BinaryOperator::Multiply | BinaryOperator::Divide => {
                     let actual_type = context.multiply_type(
                         &context.expression_type(lhs),
-                        &context.expression_type(&rhs)
+                        &context.expression_type(rhs)
                     );
 
                     *ty = actual_type;
@@ -187,10 +226,51 @@ fn translate_expression(expression: &mut Expression, context: &mut Context) {
                 BinaryOperator::Plus | BinaryOperator::Minus => {
                     let actual_type = context.add_type(
                         &context.expression_type(lhs),
-                        &context.expression_type(&rhs)
+                        &context.expression_type(rhs)
                     );
 
                     *ty = actual_type;
+                }
+
+                BinaryOperator::Cast => {
+                    let lhs_type = context.expression_type(&lhs);
+                    // let rhs_type = context.expression_type(&rhs);
+
+                    match rhs.as_ref() {
+                        Expression::Identifier(type_name) => {
+                            if context.is_primitive(&type_name) {
+                                // TODO: Is this correct? Always required for narrowing conversions anyway
+                                // if Context::castable(&lhs_type, &type_name) {
+                                if true {
+                                    *ty = type_name.to_owned();
+                                } else {
+                                    exit_with_message(format!("Error: Cannot cast from type '{}' to '{}'", &lhs_type, &type_name));
+                                }
+                            } else {
+                                exit_with_message(format!("Error: Cannot cast to non-primitive type, '{}'", &type_name));
+                            }
+                        }
+
+                        _ => {
+                            panic!("This cannot be reached");
+                        }
+                    }
+                }
+
+                BinaryOperator::Member => {
+                    match rhs.as_ref() {
+                        Expression::Identifier(ident) => {
+                            // TODO: This
+                        }
+
+                        Expression::FunctionCall{ name, parameters, ty } => {
+                            // TODO: This
+                        }
+
+                        _ => {
+                            exit_with_message("Invalid use of '.' operator".to_owned());
+                        }
+                    }
                 }
             }
         }
@@ -198,24 +278,24 @@ fn translate_expression(expression: &mut Expression, context: &mut Context) {
         // TODO: `If` is currently only treated as a statement. 
         //       Implement typing and translation for expression usage.
         Expression::If { expression, if_block, else_block, else_if_block, ty } => {
-            translate_expression(expression, context);
+            validate_expression(expression, context);
 
             context.scopes.push_scope();
             for statement in if_block {
-                translate_statement(statement, context);
+                validate_statement(statement, context);
             }
             context.scopes.pop_scope();
             
             if let Some(block_statements) = else_block {
                 context.scopes.push_scope();
                 for statement in block_statements {
-                    translate_statement(statement, context);
+                    validate_statement(statement, context);
                 }
                 context.scopes.pop_scope();
             }
 
             if let Some(else_if_expr) = else_if_block {
-                translate_expression(else_if_expr, context);
+                validate_expression(else_if_expr, context);
             }
 
             // Condition must be type "bool"
@@ -231,8 +311,10 @@ fn translate_expression(expression: &mut Expression, context: &mut Context) {
 
         }
 
-        Expression::Identifier(_ident) => {
-
+        Expression::Identifier(ident) => {
+            if !context.is_primitive(ident) && !context.scopes.is_var_in_scope(ident) {
+                exit_with_message(format!("Error: Identifier '{}' not found in scope", ident));
+            }
         }
     }
 }
@@ -278,6 +360,18 @@ pub fn translate(ast: &AST, context: &Context) -> String {
 
             Item::Scene { name, statements } => {
                 glsl.push_str(&template::scene(name, statements));
+            }
+
+            Item::Implementation { struct_name, functions } => {
+                for function in functions {
+                    match function {
+                        Item::Function { name, parameters, return_type, statements } => {
+                            glsl.push_str(&template::function(name, parameters, &return_type, statements));
+                        }
+
+                        _ => {}
+                    }
+                }
             }
         }
     }

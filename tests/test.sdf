@@ -10,9 +10,21 @@ struct SomeStruct {
     no_final_comma: int = 9,
 }
 
+impl SomeStruct {
+    fn some_function(self) {
+        let var: double = 1 - 1.2 as int * 3;
+        self;
+    }
+
+    fn another_member(self) {
+        // TODO: Make this work
+        // self.no_default += 3;
+    }
+}
+
 fn void_function() {
     let z = 7;
-    let a = 123;
+    let a = 123.2 as int;
 }
 
 fn int_function() -> int {
@@ -21,6 +33,9 @@ fn int_function() -> int {
 
 // Functions are the same as Rust
 fn function(param1: float, param2: int) -> bool {
+    // Parameters are added to the current scope
+    param1 += 3;
+
     // Type inferrence
     let var = true;
     let z = 7.33;
@@ -72,6 +87,9 @@ fn if_expressions() {
         // nested += 5;
         x -= 1;
     } else if false {
+        if true {
+            12;
+        }
         false;
     } else {
         true;
