@@ -1,5 +1,5 @@
 /*
-    Very simple example of sdf-lang
+    Simple example of sdf-lang
 */
 
 // Fields must be typed. May have defaults. Final comma optional.
@@ -16,15 +16,44 @@ impl SomeStruct {
         self;
     }
 
-    fn another_member(self) {
-        // TODO: Make this work
+    fn member_stuff(self) {
+        // TODO: Make these work
+        // self.field1;
+        // let x = self.field1 + 3;
+        // self.some_function();
         // self.no_default += 3;
+    }
+}
+
+fn loops() {
+    let x = 0;
+    let s = 2;
+
+    // FIXME: For loops can only count up and use integers
+    for i in s .. 10 {
+        x += i;
+    }
+
+    // Only valid within a loop
+    // break;
+
+    // Break and continue work as expected
+    while x <= 123 {
+        while false {
+            continue;
+            x *= 100;
+        }
+        if x == 100 {
+            break;
+        }
+        x += 5;
     }
 }
 
 fn void_function() {
     let z = 7;
-    let a = 123.2 as int;
+    // Narrowing conversions require explicit casts
+    let a: int = 123.2 as int;
 }
 
 fn int_function() -> int {
@@ -55,7 +84,7 @@ fn constructors() {
     // Cannot use reserved prefix 'gl_'
     // let gl_variable = 12;
 
-    // Uniforms are moved to global scope
+    // Uniforms are moved to global scope for GLSL, but only usable in declared scope
     @uniform
     let test: int = 8;
 
@@ -83,8 +112,6 @@ fn if_expressions() {
         let x = 5;
         x += nested;
     } else if true {
-        // Now out of scope
-        // nested += 5;
         x -= 1;
     } else if false {
         if true {

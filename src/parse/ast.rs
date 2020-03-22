@@ -119,6 +119,18 @@ pub enum Statement {
     Return {
         expression: Option<Expression>,
     },
+    For {
+        loop_var: String,
+        from: Expression,
+        to: Expression,
+        block: Vec<Statement>,
+    },
+    While {
+        condition: Expression,
+        block: Vec<Statement>,
+    },
+    Continue,
+    Break,
     Expression(Expression),
 }
 

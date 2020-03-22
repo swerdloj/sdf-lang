@@ -146,9 +146,42 @@ Statement: ast::Statement = {
 
     AssignmentStatement => <>,
 
+    ForLoop => <>,
+
+    WhileLoop => <>,
+
+    <LoopControl> ";" => <>,
+
     <Expression> ";" => ast::Statement::Expression(<>),
     
     <IfExpr> => ast::Statement::Expression(<>),
+}
+
+#[inline]
+LoopControl: ast::Statement = {
+    "continue" => ast::Statement::Continue,
+    "break" => ast::Statement::Break,
+}
+
+// TODO: Allow expressions to define the range
+ForLoop: ast::Statement = {
+    "for" <id:Ident> "in" <from:Expression> ".." <to:Expression> <block:StatementBlock> => {
+        ast::Statement::For {
+            loop_var: id,
+            from,
+            to,
+            block,
+        }
+    },
+}
+
+WhileLoop: ast::Statement = {
+    "while" <cond:Expression> <statements:StatementBlock> => {
+        ast::Statement::While {
+            condition: cond,
+            block: statements,
+        }
+    }
 }
 
 StatementBlock: Vec<ast::Statement> = {

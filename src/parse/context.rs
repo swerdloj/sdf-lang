@@ -22,6 +22,10 @@ struct FunctionSignature {
 pub struct Scope {
     // scope -> (name -> type)
     scopes: HashMap<usize, HashMap<String, String>>,
+
+    // "global", "loop", "if", "function", "scene", etc.
+    scope_variants: Vec<String>,
+
     // 0 is global scope
     current: usize,
 }
@@ -33,18 +37,29 @@ impl Scope {
 
         Scope {
             scopes,
+            scope_variants: vec!["global".to_owned()],
             current: 0,
         }
     }
 
-    pub fn push_scope(&mut self) {
+    pub fn is_within_loop(&self) -> bool {
+        self.scope_variants.contains(&String::from("loop"))
+    }
+
+    pub fn current_kind(&self) -> &String {
+        self.scope_variants.last().unwrap()
+    }
+
+    pub fn push_scope(&mut self, kind: &str) {
         self.current += 1;
+        self.scope_variants.push(kind.to_owned());
         self.scopes.insert(self.current, HashMap::new());
     }
 
     // No check is needed because scopes cannot be popped more than they are pushed
     pub fn pop_scope(&mut self) {
         self.scopes.remove(&self.current);
+        self.scope_variants.pop();
         self.current -= 1;
     }
 

@@ -4,7 +4,7 @@ use crate::exit_with_message;
 use std::collections::HashSet;
 
 // TODO: Assign uniforms their default value (type checked)
-pub fn uniforms(uniforms: &HashSet<(String, String)>) -> String {
+pub fn translate_uniforms(uniforms: &HashSet<(String, String)>) -> String {
     let mut glsl = String::new();
 
     for (index, (name, ty)) in uniforms.iter().enumerate() {
@@ -18,7 +18,7 @@ pub fn uniforms(uniforms: &HashSet<(String, String)>) -> String {
     glsl
 }
 
-pub fn outs(outs: &HashSet<(String, String)>) -> String {
+pub fn translate_outs(outs: &HashSet<(String, String)>) -> String {
     let mut glsl = String::new();
 
     for (index, (name, ty)) in outs.iter().enumerate() {
@@ -33,7 +33,7 @@ pub fn outs(outs: &HashSet<(String, String)>) -> String {
 }
 
 // Note that GLSL does not support struct defaults
-pub fn structure(name: &str, fields: &Vec<(String, String, Option<Expression>)>) -> String {
+pub fn translate_structure(name: &str, fields: &Vec<(String, String, Option<Expression>)>) -> String {
     let mut glsl = String::new();
 
     glsl.push_str(&format!("struct {} {{\n", name));
@@ -50,7 +50,7 @@ pub fn structure(name: &str, fields: &Vec<(String, String, Option<Expression>)>)
     glsl
 }
 
-pub fn function(name: &str, parameters: &Vec<(String, String)>, return_type: &str, statements: &Vec<Statement>) -> String {
+pub fn translate_function(name: &str, parameters: &Vec<(String, String)>, return_type: &str, statements: &Vec<Statement>) -> String {
     let mut glsl = String::new();
 
     let mut param_string = String::new();
@@ -75,7 +75,7 @@ pub fn function(name: &str, parameters: &Vec<(String, String)>, return_type: &st
             _ => {},
         }
 
-        glsl.push_str(&format!("\t{}", statement(nested_statement)));
+        glsl.push_str(&format!("\t{}", translate_statement(nested_statement)));
     }
 
     glsl.push_str("}\n\n");
@@ -87,7 +87,7 @@ pub fn function(name: &str, parameters: &Vec<(String, String)>, return_type: &st
 // 
 //       Scenes will need special scope treatment, as they introduce
 //       SDF functions and types
-pub fn scene(name: &str, statements: &Vec<Statement>) -> String {
+pub fn translate_scene(name: &str, statements: &Vec<Statement>) -> String {
     let mut glsl = String::new();
     
     glsl.push_str(&format!("RayResult __scene__{}(vec3 point) {{\n", name));
@@ -98,13 +98,43 @@ pub fn scene(name: &str, statements: &Vec<Statement>) -> String {
     glsl
 }
 
-pub fn statement(statement: &Statement) -> String {
+pub fn translate_statement(statement: &Statement) -> String {
     let mut glsl = String::new();
 
     match statement {
+        Statement::Continue => {
+            glsl.push_str("continue");
+        }
+        Statement::Break => {
+            glsl.push_str("break");
+        }
+
+        Statement::While { condition, block } => {
+            glsl.push_str(&format!("while ({}) {{\n", translate_expression(condition)));
+
+            for block_stmt in block {
+                glsl.push_str(&format!("\t\t{}", translate_statement(block_stmt)));
+            }
+
+            glsl.push_str("\t}");
+        }
+
+        // TODO: Consider generating a while loop instead
+        Statement::For { loop_var, from, to, block } => {
+            // TODO: Require the expressions to be compile-time, then determine
+            //       whether the loop should be > or < and ++ or --
+            glsl.push_str(&format!("for (int {} = {}; {} < {}; ++{}) {{\n", loop_var, translate_expression(from), loop_var, translate_expression(to), loop_var));
+            
+            for block_stmt in block {
+                glsl.push_str(&format!("\t\t{}", translate_statement(block_stmt)));
+            }
+
+            glsl.push_str("\t}");
+        }
+
         Statement::Return { expression: expr } => {
             if let Some(ret_expr) = expr {
-                glsl.push_str(&format!("return {}", expression(ret_expr)));
+                glsl.push_str(&format!("return {}", translate_expression(ret_expr)));
             } else {
                 glsl.push_str(&format!("return"));
             }
@@ -119,7 +149,7 @@ pub fn statement(statement: &Statement) -> String {
             glsl.push_str(&format!("{} {}", &ty.as_ref().unwrap(), ident));
 
             if let Some(assignment) = expr {
-                glsl.push_str(&format!(" = {}", expression(assignment)));
+                glsl.push_str(&format!(" = {}", translate_expression(assignment)));
             }
 
         }
@@ -129,7 +159,7 @@ pub fn statement(statement: &Statement) -> String {
             let mut fields = String::new();
 
             for (_field_name, expr) in &constructor.fields {
-                fields.push_str(&format!("{}, ", expression(&expr)));
+                fields.push_str(&format!("{}, ", translate_expression(&expr)));
             }
 
             // Remove trailing ", "
@@ -146,20 +176,27 @@ pub fn statement(statement: &Statement) -> String {
                 AssignmentOperator::SubtractAssign => "-=",
                 AssignmentOperator::MultiplyAssign => "*=",
                 AssignmentOperator::DivideAssign => "/=",
-            }, expression(&expr)));
+            }, translate_expression(&expr)));
         }
         
         Statement::Expression(expr) => {
-            glsl.push_str(&expression(expr));
+            glsl.push_str(&translate_expression(expr));
         }
     }
 
-    glsl.push_str(";\n");
+    // Don't place ';' after statement blocks
+    if let Some(last) = glsl.pop() {
+        if last == '}' {
+            glsl.push_str("}\n");
+        } else {
+            glsl.push_str(&format!("{};\n", last));
+        }
+    }
 
     glsl
 }
 
-pub fn expression(expr: &Expression) -> String {
+pub fn translate_expression(expr: &Expression) -> String {
     let mut glsl = String::new();
     
     match expr {
@@ -190,47 +227,47 @@ pub fn expression(expr: &Expression) -> String {
         Expression::Binary { lhs, operator, rhs, .. } => {
             glsl.push_str(&match operator {
                 BinaryOperator::Plus => {
-                    format!("{} + {}", expression(lhs), expression(rhs))
+                    format!("{} + {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::Minus => {
-                    format!("{} - {}", expression(lhs), expression(rhs))
+                    format!("{} - {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::Multiply => {
-                    format!("{} * {}", expression(lhs), expression(rhs))
+                    format!("{} * {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::Divide => {
-                    format!("{} / {}", expression(lhs), expression(rhs))
+                    format!("{} / {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::EqualTo => {
-                    format!("{} == {}", expression(lhs), expression(rhs))
+                    format!("{} == {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::NotEqualTo => {
-                    format!("{} != {}", expression(lhs), expression(rhs))
+                    format!("{} != {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::GreaterThan => {
-                    format!("{} > {}", expression(lhs), expression(rhs))
+                    format!("{} > {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::LessThan => {
-                    format!("{} < {}", expression(lhs), expression(rhs))
+                    format!("{} < {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::GreaterThanOrEqualTo => {
-                    format!("{} >= {}", expression(lhs), expression(rhs))
+                    format!("{} >= {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::LessThanOrEqualTo => {
-                    format!("{} <= {}", expression(lhs), expression(rhs))
+                    format!("{} <= {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::And => {
-                    format!("{} && {}", expression(lhs), expression(rhs))
+                    format!("{} && {}", translate_expression(lhs), translate_expression(rhs))
                 },
                 BinaryOperator::Or => {
-                    format!("{} || {}", expression(lhs), expression(rhs))
+                    format!("{} || {}", translate_expression(lhs), translate_expression(rhs))
                 },
 
                 BinaryOperator::Cast => {
-                    format!("{}({})", expression(rhs), expression(lhs))
+                    format!("{}({})", translate_expression(rhs), translate_expression(lhs))
                 }
                 BinaryOperator::Member => {
-                    format!("{}.{}", expression(lhs), expression(rhs))
+                    format!("{}.{}", translate_expression(lhs), translate_expression(rhs))
                 }
             });
         }
@@ -246,13 +283,13 @@ pub fn expression(expr: &Expression) -> String {
                 }
             }
 
-            glsl.push_str(&expression(rhs));
+            glsl.push_str(&translate_expression(rhs));
         }
 
         Expression::FunctionCall { name, parameters, .. } => {
             let mut params = String::new();
             for subexpr in parameters {
-                params.push_str(&format!("{}, ", expression(subexpr)));
+                params.push_str(&format!("{}, ", translate_expression(subexpr)));
             }
 
             // Remove traling ", "
@@ -266,19 +303,19 @@ pub fn expression(expr: &Expression) -> String {
         // (although this is valid in GLSL)
         // TODO: Nested indentation is off
         Expression::If { expression: expr, if_block, else_block, else_if_block, ty } => {
-            glsl.push_str(&format!("if ({}) {{\n", expression(expr)));
+            glsl.push_str(&format!("if ({}) {{\n", translate_expression(expr)));
             
             for stmt in if_block {   
-                glsl.push_str(&format!("\t\t{}", statement(stmt)));
+                glsl.push_str(&format!("\t\t{}", translate_statement(stmt)));
             }
 
             if let Some(else_satements) = else_block {
                 glsl.push_str("\t} else {\n");
                 for stmt in else_satements {
-                    glsl.push_str(&format!("\t\t{}", statement(stmt)));
+                    glsl.push_str(&format!("\t\t{}", translate_statement(stmt)));
                 }
             } else if let Some(else_if_statements) = else_if_block {
-                glsl.push_str(&format!("\t}} else {}\n", expression(else_if_statements)));
+                glsl.push_str(&format!("\t}} else {}\n", translate_expression(else_if_statements)));
                 
                 // Remove trailing "\n\t}"
                 glsl.pop();
