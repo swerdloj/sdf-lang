@@ -14,13 +14,9 @@ The following items are not yet implemented
 - Constructors
 ### Statements
 - `for` loop  
-- `while` loop
 - `do while` loop
-- `break`
-- `continue`
 ### Structs
-- member field access
-- member function calling
+- member function calling (currently incomplete)
 
 ## **Translator**
 - Type inferrence

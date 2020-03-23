@@ -191,15 +191,20 @@ StatementBlock: Vec<ast::Statement> = {
     },
 }
 
-// TODO: Separate out 'member' stuff rather than hacking in an expression lhs
 AssignmentStatement: ast::Statement = {
-    <lhs:Expression> <op:AssignmentOperator> <expr:Expression> ";" => {
+    <lhs:IdentOrMember> <op:AssignmentOperator> <expr:Expression> ";" => {
         ast::Statement::Assignment {
             lhs,
             op,
             expression: expr,
         }
     }
+}
+
+#[inline]
+IdentOrMember: ast::IdentOrMember = {
+    <Ident> => ast::IdentOrMember::Ident(<>),
+    <Member> => ast::IdentOrMember::Member(<>),
 }
     
 LetStatement: ast::Statement = {
@@ -249,7 +254,7 @@ Expression: ast::Expression = {
 }
 
 // Treated same as identifier/literal
-FunctionCall: ast::Expression = {
+FunctionCall: ast::FunctionCall = {
     <name:Ident> "(" <params_multi:(<Expression> ",")*>
                      <param_final:(<Expression>)?> ")"
     => {
@@ -258,7 +263,7 @@ FunctionCall: ast::Expression = {
             params.push(param);
         }
 
-        ast::Expression::FunctionCall {
+        ast::FunctionCall {
             name,
             parameters: params,
             ty: "temp".to_owned(),
@@ -347,7 +352,29 @@ CastExpr: ast::Expression = {
         }
     },
 
+    Member => ast::Expression::Member(<>),
+
     BaseExpr => <>,
+}
+
+Member: ast::Member = {
+    <single:(<IdentOrFunction> "." <IdentOrFunction>)> <multi:("." <IdentOrFunction>)*> => {
+        let mut path = multi;
+        let (first, second) = single;
+        path.insert(0, second);
+        path.insert(0, first);
+        
+        ast::Member {
+            path,
+            ty: "temp".to_owned(),
+        }
+    }
+}
+
+#[inline]
+IdentOrFunction: ast::IdentOrFunction = {
+    Ident => ast::IdentOrFunction::Ident(<>),
+    FunctionCall => ast::IdentOrFunction::Function(<>),
 }
 
 // TODO: Keep parenthesis around expressions when translating
@@ -361,7 +388,9 @@ BaseExpr: ast::Expression = {
         ast::Expression::Identifier(<>)
     },
 
-    FunctionCall => <>,
+    FunctionCall => {
+        ast::Expression::FunctionCall(<>)
+    },
 
     "-" <BaseExpr> => {
         ast::Expression::Unary {
@@ -382,7 +411,7 @@ BaseExpr: ast::Expression = {
 
 #[inline]
 CastOp: ast::BinaryOperator = {
-    "." => ast::BinaryOperator::Member,
+    // "." => ast::BinaryOperator::Member,
     "as" => ast::BinaryOperator::Cast,
 }
 

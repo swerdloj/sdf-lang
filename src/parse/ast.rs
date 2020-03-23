@@ -43,11 +43,8 @@ pub enum Expression {
         rhs: Box<Expression>,
         ty: String,
     },
-    FunctionCall {
-        name: String,
-        parameters: Vec<Expression>,
-        ty: String,
-    },
+    FunctionCall(FunctionCall),
+    Member(Member),
     If {
         expression: Box<Expression>,
         if_block: Vec<Statement>,
@@ -55,6 +52,13 @@ pub enum Expression {
         else_if_block: Option<Box<Expression>>,
         ty: String,
     },
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionCall {
+    pub name: String,
+    pub parameters: Vec<Expression>,
+    pub ty: String,
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +76,6 @@ pub enum BinaryOperator {
     Divide,
 
     Cast,
-    Member,
 
     EqualTo,
     NotEqualTo,
@@ -112,7 +115,7 @@ pub enum Statement {
         constructor: Constructor,
     },
     Assignment {
-        lhs: Expression,
+        lhs: IdentOrMember,
         op: AssignmentOperator,
         expression: Expression,
     },
@@ -134,15 +137,24 @@ pub enum Statement {
     Expression(Expression),
 }
 
-// // TODO: Use this for dot operator stuff
-// struct Member {
-//     // ident.function.ident.function etc.
-//     Vec<IdentOrFunction>, 
-// }
-// enum IdentOrFunction {
-//     Ident(String),
-//     Function(FunctionCall),
-// }
+#[derive(Debug, Clone)]
+pub enum IdentOrMember {
+    Ident(String),
+    Member(Member),
+}
+
+#[derive(Debug, Clone)]
+pub struct Member {
+    // ident.function.ident.function etc.
+    pub path: Vec<IdentOrFunction>,
+    // The final item's type
+    pub ty: String,
+}
+#[derive(Debug, Clone)]
+pub enum IdentOrFunction {
+    Ident(String),
+    Function(FunctionCall),
+}
 
 #[derive(Debug, Clone)]
 /// A tag identifies variables which require CPU initialization or modification

@@ -155,37 +155,40 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
         }
 
         Statement::Assignment { lhs, op, expression } => {
-            let mut lhs_type = "".to_owned();
+            let mut lhs_type = String::from("temp");
 
-            validate_expression(lhs, context);
-            
-            // lhs is ident
-            if let Expression::Identifier(ident) = lhs {
-                if !context.scopes.is_var_in_scope(ident) {
-                    exit_with_message(format!("Error: No such variable in scope: '{}'", ident));
+            match lhs {
+                IdentOrMember::Ident(ident) => {
+                    lhs_type = context.scopes.var_type(ident);
                 }
-                lhs_type = context.scopes.var_type(ident);
-            }
-            // lhs is member field
-            else if let Expression::Binary {lhs, operator, rhs, ty} = lhs {
-                if let BinaryOperator::Member = operator {
-                    lhs_type = ty.clone();
-                } else {
-                    exit_with_message(format!("Error: Assignment left hand side must be an identifier or field"));
+                
+                // lhs must be a series of identifiers and fields. No functions.
+                IdentOrMember::Member(member) => {                   
+                    for item in &member.path {
+                        match item {
+                            IdentOrFunction::Ident(ident) => {
+                                // First item is a variable. The rest are fields.
+                                if lhs_type == "temp" {
+                                    lhs_type = context.scopes.var_type(ident);
+                                } else {
+                                    lhs_type = context.struct_field_type(&lhs_type, ident);
+                                }
+                            }
+
+                            // TODO: Is this always true? Or are there cases where this would be valid?
+                            IdentOrFunction::Function(func) => {
+                                exit_with_message(format!("Error: Cannot assign to '.' operator with function call '{}'", func.name));
+                            }
+                        }
+                    }
                 }
             }
-            
 
             // rhs
             validate_expression(expression, context);
             let expr_type = context.expression_type(expression);
 
             if !Context::castable(&expr_type, &lhs_type) {
-                // TODO: These errors
-                // if is_member {
-                //     exit_with_message(format!("Error: Field '{}' of struct '{}' cannot be assigned to incompatible type '{}'", , , &expr_type));
-                // }
-                // exit_with_message(format!("Error: Variable '{}' cannot be assigned to incompatible type '{}'", ident, &expr_type));
                 exit_with_message(format!("Error: Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &expr_type));
             }
         }
@@ -239,15 +242,15 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
 
 fn validate_expression(expression: &mut Expression, context: &mut Context) {
     match expression {
-        Expression::FunctionCall { name, parameters, ty } => {
-            let param_types = parameters.iter_mut().map(|expr| {
+        Expression::FunctionCall(call) => {
+            let param_types = call.parameters.iter_mut().map(|expr| {
                 validate_expression(expr, context);
                 context.expression_type(expr)
             }).collect();
             
-            let return_type = context.check_function_call(name, param_types);
+            let return_type = context.check_function_call(&call.name, param_types);
 
-            *ty = return_type;
+            call.ty = return_type;
         }
 
         Expression::Unary { operator, rhs, ty } => {
@@ -264,50 +267,59 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                     *ty = "bool".to_owned();
                 }
             }
-            
         }
 
-        Expression::Binary { lhs, operator, rhs, ty } => {
-            // Special case: member access including functions (does not exist in GLSL)
-            if let BinaryOperator::Member = operator {
-                // ident. (...)
-                if let Expression::Identifier(ident) = lhs.as_mut() {
-                    if !context.scopes.is_var_in_scope(ident) {
-                        exit_with_message(format!("Error: Identifier '{}' was not found in the scope.", ident));
+        Expression::Member(member) => {
+            // First item
+            let mut current_type = String::from("temp");
+            let mut last_ident = String::new();
+
+            let mut to_remove = Vec::new();
+
+            // TODO: Re-order the path such that 
+            //       [ident, f1(), b, f2()] = a.f1().b.c.f2() becomes
+            //       f2( f1( a ).b.c )      <- function calls are moved to front
+            for (index, item) in member.path.iter_mut().enumerate() {
+                match item {
+                    IdentOrFunction::Ident(ident) => {
+                        if current_type == "temp" {
+                            // First item must be a variable. Following would be fields.
+                            current_type = context.scopes.var_type(ident);
+                        } else {
+                            current_type = context.struct_field_type(&current_type, ident);
+                        }
+                        last_ident = ident.clone();
                     }
 
-                    // ident.function()
-                    if let Expression::FunctionCall { name, parameters, ty: func_ty } = rhs.as_mut() {
-                        // Add self as first parameter
-                        parameters.insert(0, Expression::Identifier(ident.clone()));
-                        
-                        let param_types = parameters.iter_mut().map(|expr| {
+                    // Note that function calls cannot happen before identifiers
+                    IdentOrFunction::Function(func) => {
+                        if current_type == "temp" {
+                            exit_with_message(format!("Error: Member methods must be accessed via the '.' operator: '{}'", func.name));
+                        }
+                        func.name = format!("__{}__{}", current_type, func.name);
+
+                        // TODO: Also need to allow fields (not just single ident)
+                        func.parameters.insert(0, Expression::Identifier(last_ident.clone()));
+                        // ident was moved into the function call
+                        to_remove.push(index - 1);
+
+                        let param_types = func.parameters.iter_mut().map(|expr| {
                             validate_expression(expr, context);
                             context.expression_type(expr)
                         }).collect();
 
-                        *name = format!("__{}__{}", context.scopes.var_type(ident), name);
-                        
-                        *ty = context.check_function_call(&name, param_types);
-                        *func_ty = ty.clone();
+                        current_type = context.check_function_call(&func.name, param_types);
+                        func.ty = current_type.clone();
                     }
-                    // ident.ident
-                    else if let Expression::Identifier(name) = rhs.as_mut() {
-                        *ty = context.struct_field_type(&context.scopes.var_type(ident), name);
-                    }
-                    // ident.expression
-                    else {
-                        exit_with_message("Error: Invalid use of dot operator".to_owned());
-                    }
-
-                // TODO: function().ident and function().function() ??
-                } else {
-                    exit_with_message(format!("Error: Dot operator can only be used on identifiers"));
                 }
-
-                return;
             }
-            
+
+            to_remove.into_iter().rev().map(|index| member.path.remove(index)).for_each(drop);
+
+            member.ty = current_type;
+        }
+
+        Expression::Binary { lhs, operator, rhs, ty } => {            
             validate_expression(lhs, context);
             validate_expression(rhs, context);
 
@@ -358,10 +370,6 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                             panic!("This cannot be reached");
                         }
                     }
-                }
-
-                BinaryOperator::Member => {
-                    // Handled above (special case)
                 }
             }
         }

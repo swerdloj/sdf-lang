@@ -195,11 +195,10 @@ impl Context {
                     return ty.to_owned();
                 }
             }
-
             exit_with_message(format!("Error: Struct '{}' does not have field '{}'", struct_name, field_name));
             unreachable!();
         } else {
-            exit_with_message(format!("Error: Struct '{}' does not exist", struct_name));
+            exit_with_message(format!("Error: Type '{}' is not a struct or does not exist (tried accessing field '{}')", struct_name, field_name));
             unreachable!();
         }
     }
@@ -247,6 +246,15 @@ impl Context {
         }
 
         constructor
+    }
+
+    pub fn function_type(&self, name: &str) -> String {
+        if let Some(function) = self.functions.get(name) {
+            function.return_type.clone()
+        } else {
+            exit_with_message(format!("Error: No such function exists: '{}'", name));
+            unreachable!();
+        }
     }
 
     pub fn declare_function(&mut self, name: String, parameters: Vec<(String, String)>, ty: String) {
@@ -482,12 +490,16 @@ impl Context {
                 ty.clone()
             }
 
-            ast::Expression::FunctionCall {ty, ..} => {
+            ast::Expression::FunctionCall(call) => {
+                call.ty.clone()
+            }
+
+            ast::Expression::If {ty, .. } => {
                 ty.clone()
             }
 
-            ast::Expression::If{ ty, .. } => {
-                ty.clone()
+            ast::Expression::Member(member) => {
+                member.ty.clone()
             }
         }
     }
