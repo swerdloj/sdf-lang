@@ -1,5 +1,5 @@
 /*
-    Simple example of sdf-lang
+    Examples/tests of sdf-lang
 */
 
 // Fields must be typed. May have defaults. Final comma optional.
@@ -10,19 +10,32 @@ struct SomeStruct {
     no_final_comma: int = 9,
 }
 
+// Struct implementations have a "self" reference
 impl SomeStruct {
-    fn some_function(self) {
+    fn some_function(self, input: float) -> float {
         let var: double = 1 - 1.2 as int * 3;
-        self;
+        return self.field1 * input;
     }
 
     fn member_stuff(self) {
-        // TODO: Make these work
-        // self.field1;
-        // let x = self.field1 + 3;
-        // self.some_function();
-        // self.no_default += 3;
+        self.field1;
+        // Inferred from field
+        let x = self.field1 + 3;
+        // Inferred from member
+        let y = self.some_function(1.2) * 3;
+
+        self.some_function(1.);
+        
+        self.no_default += 3;
     }
+}
+
+fn vectors() {
+    // let x: vec3 = vec3(1, 2, 3);
+    // let y = x;
+    // let z = 1.3;
+    // let w = vec3(z, 1.2, z);
+    // vec2(1, 2);
 }
 
 fn loops() {
@@ -94,6 +107,8 @@ fn constructors() {
         no_default: 7 + 3 - int_function(),
         field1: 12,
     };
+
+    some_struct.some_function(test);
 
     function(1.3, -12);
 }

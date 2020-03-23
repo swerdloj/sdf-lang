@@ -112,7 +112,7 @@ pub enum Statement {
         constructor: Constructor,
     },
     Assignment {
-        ident: String,
+        lhs: Expression,
         op: AssignmentOperator,
         expression: Expression,
     },
@@ -134,6 +134,16 @@ pub enum Statement {
     Expression(Expression),
 }
 
+// // TODO: Use this for dot operator stuff
+// struct Member {
+//     // ident.function.ident.function etc.
+//     Vec<IdentOrFunction>, 
+// }
+// enum IdentOrFunction {
+//     Ident(String),
+//     Function(FunctionCall),
+// }
+
 #[derive(Debug, Clone)]
 /// A tag identifies variables which require CPU initialization or modification
 pub enum Tag {
@@ -146,10 +156,24 @@ pub enum Tag {
 #[derive(Debug, Clone)]
 /// GLSL Types
 pub enum Literal {
+    Vector(Vector),
     Float(f32),
     Double(f64),
     // FIXME: Type should default to i64, then decide on i/u 32 later (for parsing)
     Int(i32),
     UInt(u32),
     Bool(bool),
+}
+
+#[derive(Debug, Clone)]
+pub enum Vector {
+    Vec2(IdentOrLiteral, IdentOrLiteral),
+    Vec3(IdentOrLiteral, IdentOrLiteral, IdentOrLiteral),
+    Vec4(IdentOrLiteral, IdentOrLiteral, IdentOrLiteral, IdentOrLiteral),
+}
+
+#[derive(Debug, Clone)]
+pub enum IdentOrLiteral {
+    Ident(String),
+    Literal(Box<Literal>),
 }

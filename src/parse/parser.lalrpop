@@ -7,13 +7,14 @@ grammar();
 match {
     // Do not allow "true" or "false" as identifiers. Make them literals.
     r"(true)|(false)" => BOOL,
+    r"[a-z]?(vec)[1-4]" => VEC_IDENTIFIER,
 
     // Ignore comments
     // from https://github.com/lalrpop/lalrpop/pull/509/commits/ee2f7060e99f902620ac4edeea5cfe3c3551f09c)
     r"\s*" => { },
     r"//[^\n\r]*[\n\r]*" => { },
-    // TODO: Look at this regex; it may do more than I want 
-    // FIXME: Inline comments don't work
+    // TODO: Look at this regex; it may do more than I want/need 
+    // FIXME: In-line comments don't work
     r"/\*([^\*]*\*+[^\*/])*([^\*]*\*+|[^\*])*\*/" => { },
 } else {
     _
@@ -91,7 +92,7 @@ FunctionParams: Vec<(String, String)> = {
             }
             params.push(("self".to_owned(), "self".to_owned())); 
         } else if let Some(sc) = self_comma {
-            if "sc" != "self" {
+            if sc != "self" {
                 exit_with_message(format!("Error: TODO: not 'self'"));
             }
             params.push(("self".to_owned(), "self".to_owned())); 
@@ -190,11 +191,11 @@ StatementBlock: Vec<ast::Statement> = {
     },
 }
 
-// TODO: Allow member field assignment (with dot operator)
+// TODO: Separate out 'member' stuff rather than hacking in an expression lhs
 AssignmentStatement: ast::Statement = {
-    <id:Ident> <op:AssignmentOperator> <expr:Expression> ";" => {
+    <lhs:Expression> <op:AssignmentOperator> <expr:Expression> ";" => {
         ast::Statement::Assignment {
-            ident: id,
+            lhs,
             op,
             expression: expr,
         }
@@ -243,7 +244,6 @@ ConstructorArgs: Vec<(String, ast::Expression)> = {
 
 // ---------------- EXPRESSION ----------------
 
-// TODO: Understand how precedence works
 Expression: ast::Expression = {
     BooleanExpr => <>,
 }
@@ -422,6 +422,8 @@ BoolOp: ast::BinaryOperator = {
 // ---------------- IDENTIFIER, LITERAL, TAG ----------------
 
 Ident: String = {
+    <VEC_IDENTIFIER> => <>.to_owned(),
+
     <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => {
         if <>.len() >= 3 && <>[0..=2].to_owned() == "gl_".to_owned() {
             exit_with_message(format!("Error: The identifier prefix 'gl_' is reserved (used in '{}')", <>));
@@ -441,7 +443,25 @@ Tag: ast::Tag = {
 }
 
 Literal: ast::Literal = {
+    <Vector> => ast::Literal::Vector(<>),
     <uint:r"[0-9]+"> => ast::Literal::UInt(uint.parse::<u32>().unwrap()),
     <float:r"[0-9]+[.][0-9]*"> => ast::Literal::Float(float.parse::<f32>().unwrap()),
     <boolean:BOOL> => ast::Literal::Bool(boolean.parse::<bool>().unwrap()),
+}
+
+Vector: ast::Vector = {
+    "vec2" "(" <i1:IdentOrLiteral> "," <i2:IdentOrLiteral> ")"
+        => ast::Vector::Vec2(i1, i2),
+
+    "vec3" "(" <i1:IdentOrLiteral> "," <i2:IdentOrLiteral> "," <i3:IdentOrLiteral>
+        => ast::Vector::Vec3(i1, i2, i3),
+
+    "vec4" "(" <i1:IdentOrLiteral> "," <i2:IdentOrLiteral> "," <i3:IdentOrLiteral> "," <i4:IdentOrLiteral> ")" 
+        => ast::Vector::Vec4(i1, i2, i3, i4),
+}
+
+#[inline]
+IdentOrLiteral: ast::IdentOrLiteral = {
+    Ident => ast::IdentOrLiteral::Ident(<>),
+    Literal => ast::IdentOrLiteral::Literal(Box::new(<>)),
 }

@@ -112,6 +112,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             }
 
             let checked_type = if let Some(specified_type) = ty {
+                context.validate_type(specified_type);
                 // Check whether type assigned is compatible with user-specified
                 if let Some(assignment) = expression {                    
                     let assigned_type = context.expression_type(assignment);
@@ -153,17 +154,39 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             constructor.fields = context.generate_constructor(&constructor.ty, constructor.fields.clone());
         }
 
-        Statement::Assignment { ident, op, expression } => {
-            // TODO: Member assignment
-            if !context.scopes.is_var_in_scope(ident) {
-                exit_with_message(format!("Error: No such variable in scope: '{}'", ident));
+        Statement::Assignment { lhs, op, expression } => {
+            let mut lhs_type = "".to_owned();
+
+            validate_expression(lhs, context);
+            
+            // lhs is ident
+            if let Expression::Identifier(ident) = lhs {
+                if !context.scopes.is_var_in_scope(ident) {
+                    exit_with_message(format!("Error: No such variable in scope: '{}'", ident));
+                }
+                lhs_type = context.scopes.var_type(ident);
             }
+            // lhs is member field
+            else if let Expression::Binary {lhs, operator, rhs, ty} = lhs {
+                if let BinaryOperator::Member = operator {
+                    lhs_type = ty.clone();
+                } else {
+                    exit_with_message(format!("Error: Assignment left hand side must be an identifier or field"));
+                }
+            }
+            
 
+            // rhs
             validate_expression(expression, context);
-
             let expr_type = context.expression_type(expression);
-            if !Context::castable(&expr_type, &context.scopes.var_type(ident)) {
-                exit_with_message(format!("Error: Variable '{}' cannot be assigned to incompatible type '{}'", ident, &expr_type));
+
+            if !Context::castable(&expr_type, &lhs_type) {
+                // TODO: These errors
+                // if is_member {
+                //     exit_with_message(format!("Error: Field '{}' of struct '{}' cannot be assigned to incompatible type '{}'", , , &expr_type));
+                // }
+                // exit_with_message(format!("Error: Variable '{}' cannot be assigned to incompatible type '{}'", ident, &expr_type));
+                exit_with_message(format!("Error: Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &expr_type));
             }
         }
 
@@ -217,12 +240,10 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
 fn validate_expression(expression: &mut Expression, context: &mut Context) {
     match expression {
         Expression::FunctionCall { name, parameters, ty } => {
-            let mut param_types = Vec::new();
-            
-            for param in parameters {
-                validate_expression(param, context);
-                param_types.push(context.expression_type(param));
-            }
+            let param_types = parameters.iter_mut().map(|expr| {
+                validate_expression(expr, context);
+                context.expression_type(expr)
+            }).collect();
             
             let return_type = context.check_function_call(name, param_types);
 
@@ -247,6 +268,46 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
         }
 
         Expression::Binary { lhs, operator, rhs, ty } => {
+            // Special case: member access including functions (does not exist in GLSL)
+            if let BinaryOperator::Member = operator {
+                // ident. (...)
+                if let Expression::Identifier(ident) = lhs.as_mut() {
+                    if !context.scopes.is_var_in_scope(ident) {
+                        exit_with_message(format!("Error: Identifier '{}' was not found in the scope.", ident));
+                    }
+
+                    // ident.function()
+                    if let Expression::FunctionCall { name, parameters, ty: func_ty } = rhs.as_mut() {
+                        // Add self as first parameter
+                        parameters.insert(0, Expression::Identifier(ident.clone()));
+                        
+                        let param_types = parameters.iter_mut().map(|expr| {
+                            validate_expression(expr, context);
+                            context.expression_type(expr)
+                        }).collect();
+
+                        *name = format!("__{}__{}", context.scopes.var_type(ident), name);
+                        
+                        *ty = context.check_function_call(&name, param_types);
+                        *func_ty = ty.clone();
+                    }
+                    // ident.ident
+                    else if let Expression::Identifier(name) = rhs.as_mut() {
+                        *ty = context.struct_field_type(&context.scopes.var_type(ident), name);
+                    }
+                    // ident.expression
+                    else {
+                        exit_with_message("Error: Invalid use of dot operator".to_owned());
+                    }
+
+                // TODO: function().ident and function().function() ??
+                } else {
+                    exit_with_message(format!("Error: Dot operator can only be used on identifiers"));
+                }
+
+                return;
+            }
+            
             validate_expression(lhs, context);
             validate_expression(rhs, context);
 
@@ -300,19 +361,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                 }
 
                 BinaryOperator::Member => {
-                    match rhs.as_ref() {
-                        Expression::Identifier(ident) => {
-                            // TODO: This
-                        }
-
-                        Expression::FunctionCall{ name, parameters, ty } => {
-                            // TODO: This
-                        }
-
-                        _ => {
-                            exit_with_message("Invalid use of '.' operator".to_owned());
-                        }
-                    }
+                    // Handled above (special case)
                 }
             }
         }
@@ -361,19 +410,9 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
     }
 }
 
-/*
-
-    This function should transform the AST into valid GLSL code.
-    In order to maintain scopes, types, etc., this function utilizes a context.
-
-    That context must track valid identifiers 
-        (functions, primitives, structs, builtins, etc.)
-    This is done within the parser, meaning a parsed file has an associated context.
-
-    TODO: A lot of this could be moved to the parser
-
-*/
 pub fn translate(ast: &AST, context: &Context) -> String {
+    use template::*;
+
     // Unfortunately, GLSL requires functions to be declared in order of use
     // sdf-lang can compensate for this by forward declaring all functions
     // OR sdf-lang can also require forced ordering
@@ -382,33 +421,32 @@ pub fn translate(ast: &AST, context: &Context) -> String {
 
     // TODO: Allow user to specify version
     glsl.push_str("#version 450 core\n\n");
-    // glsl.push_str("out vec4 __out__color;\n\n");
 
-    glsl.push_str(&template::translate_uniforms(context.uniforms()));
-    glsl.push_str(&template::translate_outs(context.outs()));
+    glsl.push_str(&translate_uniforms(context.uniforms()));
+    glsl.push_str(&translate_outs(context.outs()));
 
     // TODO: Allow let statements at global scope for global variables
     for item in ast {
         // `Item`s always have global scopes
         match item {
             Item::Struct { name, fields } => {
-                glsl.push_str(&template::translate_structure(name, fields));
+                glsl.push_str(&translate_structure(name, fields));
             }
 
             Item::Function { name, parameters, return_type, statements } => {
                 // TODO: Body statements
-                glsl.push_str(&template::translate_function(name, parameters, &return_type, statements));
+                glsl.push_str(&translate_function(name, parameters, &return_type, statements));
             }
 
             Item::Scene { name, statements } => {
-                glsl.push_str(&template::translate_scene(name, statements));
+                glsl.push_str(&translate_scene(name, statements));
             }
 
             Item::Implementation { struct_name, functions } => {
                 for function in functions {
                     match function {
                         Item::Function { name, parameters, return_type, statements } => {
-                            glsl.push_str(&template::translate_function(name, parameters, &return_type, statements));
+                            glsl.push_str(&translate_function(name, parameters, &return_type, statements));
                         }
 
                         _ => {}

@@ -188,6 +188,22 @@ impl Context {
         }
     }
 
+    pub fn struct_field_type(&self, struct_name: &str, field_name: &str) -> String {
+        if let Some(signature) = self.structs.get(struct_name) {
+            for (name, ty, _default) in &signature.fields {
+                if name == field_name {
+                    return ty.to_owned();
+                }
+            }
+
+            exit_with_message(format!("Error: Struct '{}' does not have field '{}'", struct_name, field_name));
+            unreachable!();
+        } else {
+            exit_with_message(format!("Error: Struct '{}' does not exist", struct_name));
+            unreachable!();
+        }
+    }
+
     /// Order constructor arguments and place defaults where needed
     pub fn generate_constructor(&self, ty: &str, fields: Vec<(String, ast::Expression)>) -> Vec<(String, ast::Expression)> {
         // Existance is already guarenteed, so can just unwrap()
@@ -364,6 +380,13 @@ impl Context {
 
             // TODO: Remaining types (vecs, etc.)
 
+            "vec2" | "vec3" | "vec4" => {
+                match right_type {
+                    "float" | "int" | "uint" => "vec3",
+                    _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
+                }
+            }
+
             _ => {
                 exit_with_message(format!("Cannot add/subtract type '{}' with type '{}'", left_type, right_type));
                 unreachable!();
@@ -381,11 +404,13 @@ impl Context {
     pub fn negate_type(&self, type_name: &str) -> String {
         match type_name {
             "uint" => "int".to_owned(),
+
             "bool" => {
                 exit_with_message("Cannot negate a boolean".to_owned());
                 unreachable!();
             }
 
+            // double, float, vec2, vec3, vec4, etc.
             x => {
                 if self.structs.contains_key(x) {
                     exit_with_message("Only numeric types can be negated".to_owned());
@@ -413,27 +438,36 @@ impl Context {
             ast::Expression::Literal(literal) => {
                 match literal {
                     ast::Literal::Bool(_) => {
-                        "bool".to_owned()
+                        "bool"
                     }
 
                     ast::Literal::Float(_) => {
-                        "float".to_owned()
+                        "float"
                     }
 
                     ast::Literal::Int(_) => {
-                        "int".to_owned()
+                        "int"
                     }
                     
                     ast::Literal::UInt(_) => {
-                        "uint".to_owned()
+                        "uint"
                     }
 
+                    ast::Literal::Vector(vec) => {
+                        // TODO: The rest
+                        
+                        match vec {
+                            ast::Vector::Vec2(_, _) => "vec2",
+                            ast::Vector::Vec3(_, _, _) => "vec3",
+                            ast::Vector::Vec4(_, _, _, _) => "vec4",
+                        }
+                    }
+                    
                     x => {
                         panic!("Type of {:?} is not implemented yet", x)
                     },
 
-                    // TODO: The rest
-                }
+                }.to_owned()
             }
 
             ast::Expression::Identifier(name) => {

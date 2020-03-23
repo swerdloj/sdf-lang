@@ -169,8 +169,8 @@ pub fn translate_statement(statement: &Statement) -> String {
             glsl.push_str(&format!("{} {} = {}({})", constructor.ty, ident, constructor.ty, fields));
         }
         
-        Statement::Assignment { ident, op, expression: expr } => {
-            glsl.push_str(&format!("{} {} {}", ident, match op {
+        Statement::Assignment { lhs, op, expression: expr } => {
+            glsl.push_str(&format!("{} {} {}", translate_expression(lhs), match op {
                 AssignmentOperator::Assign => "=",
                 AssignmentOperator::AddAssign => "+=",
                 AssignmentOperator::SubtractAssign => "-=",
@@ -202,6 +202,21 @@ pub fn translate_expression(expr: &Expression) -> String {
     match expr {
         Expression::Literal(literal) => {
             match literal {
+                Literal::Vector(vec) => {
+                    let translate = |i: &IdentOrLiteral| {match i { IdentOrLiteral::Ident(ident) => ident.to_owned(),
+                                                                                    IdentOrLiteral::Literal(lit) => translate_expression(&Expression::Literal(*lit.clone())).to_owned(), }};
+                    match vec {
+                        Vector::Vec2(f1, f2) => {
+                            glsl.push_str(&format!("vec2({}, {})", translate(f1), translate(f2)));
+                        }
+                        Vector::Vec3(f1, f2, f3) => {
+                            glsl.push_str(&format!("vec2({}, {}, {})", translate(f1), translate(f2), translate(f3)));
+                        }
+                        Vector::Vec4(f1, f2, f3, f4) => {
+                            glsl.push_str(&format!("vec2({}, {}, {}, {})", translate(f1), translate(f2), translate(f3), translate(f4)));
+                        }
+                    }
+                }
                 Literal::Float(f) => {
                     glsl.push_str(&f.to_string());
                 }
@@ -267,7 +282,16 @@ pub fn translate_expression(expr: &Expression) -> String {
                     format!("{}({})", translate_expression(rhs), translate_expression(lhs))
                 }
                 BinaryOperator::Member => {
-                    format!("{}.{}", translate_expression(lhs), translate_expression(rhs))
+                    if let Expression::Identifier(name) = lhs.as_ref() {
+                        if let Expression::FunctionCall { name, parameters, ty } = rhs.as_ref() {
+                            format!("{}", translate_expression(rhs))
+                        } else {
+                            format!("{}.{}", translate_expression(lhs), translate_expression(rhs))
+                        }
+                    } else {
+                        // FIXME: Is this correct?   
+                        "".to_owned()
+                    }
                 }
             });
         }

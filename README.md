@@ -97,4 +97,4 @@ The most common tag is `@uniform` which specifies that a variable will be modifi
 let x: int = 7;
 ```
 
-Furthermore, such `@uniform` variables are added to the globabl scope.
+Furthermore, such `@uniform` variables are added to the global scope.
