@@ -41,7 +41,10 @@ Item: ast::Item = {
 // ---------------- SCENE ----------------
 
 Scene: ast::Item = {
-    "scene" <name:Ident> <s:StatementBlock> => ast::Item::Scene{name: name, statements: s},
+    "scene" <name:Ident> <s:StatementBlock> => ast::Item::Scene {
+        name: name, 
+        statements: s
+    },
 }
 
 // ---------------- FUNCTION ----------------
@@ -469,25 +472,7 @@ Tag: ast::Tag = {
 }
 
 Literal: ast::Literal = {
-    <Vector> => ast::Literal::Vector(<>),
     <uint:r"[0-9]+"> => ast::Literal::UInt(uint.parse::<u32>().unwrap()),
     <float:r"[0-9]+[.][0-9]*"> => ast::Literal::Float(float.parse::<f32>().unwrap()),
     <boolean:BOOL> => ast::Literal::Bool(boolean.parse::<bool>().unwrap()),
-}
-
-Vector: ast::Vector = {
-    "vec2" "(" <i1:IdentOrLiteral> "," <i2:IdentOrLiteral> ")"
-        => ast::Vector::Vec2(i1, i2),
-
-    "vec3" "(" <i1:IdentOrLiteral> "," <i2:IdentOrLiteral> "," <i3:IdentOrLiteral>
-        => ast::Vector::Vec3(i1, i2, i3),
-
-    "vec4" "(" <i1:IdentOrLiteral> "," <i2:IdentOrLiteral> "," <i3:IdentOrLiteral> "," <i4:IdentOrLiteral> ")" 
-        => ast::Vector::Vec4(i1, i2, i3, i4),
-}
-
-#[inline]
-IdentOrLiteral: ast::IdentOrLiteral = {
-    Ident => ast::IdentOrLiteral::Ident(<>),
-    Literal => ast::IdentOrLiteral::Literal(Box::new(<>)),
 }

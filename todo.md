@@ -1,10 +1,13 @@
-The following items are not yet implemented
+**The following items are not yet implemented**
+
+## Other
+- GLSL does not allow structs without any fields
+  - Could get around this by adding a dummy field when parsing the .sdf file
 
 ## **Parser**
 ### Error locations
 - Span via @L/R lalrpop bindings
 ### Types
-- `vec` types
 - `mat` types
 - `sampler` types
 - Arrays
@@ -16,10 +19,11 @@ The following items are not yet implemented
 - `for` loop  
 - `do while` loop
 ### Structs
-- member function calling (currently incomplete)
+- member function calling (currently broken for chaining)
 
 ## **Translator**
-- Type inferrence
+- Type inferrence beyond initial assignment
+- Uniform defaults
 - Scenes
 
 ## **Runtime**

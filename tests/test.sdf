@@ -8,12 +8,18 @@ struct SomeStruct {
     no_default: int,
     another_default: int = 123,
     no_final_comma: int = 9,
+    vec_field: vec4 = vec4(1),
 }
 
 // Struct implementations have a "self" reference
 impl SomeStruct {
     fn some_function(self, input: float) -> float {
         let var: double = 1 - 1.2 as int * 3;
+        
+        // Member vec access and assignemnt
+        self.vec_field.x = 2;
+        self.vec_field.xy *= 2;
+
         return self.field1 * input;
     }
 
@@ -29,12 +35,52 @@ impl SomeStruct {
     }
 }
 
+fn float_function(x: vec4) -> float {
+    return 1.2;
+}
+
 fn vectors() {
-    // let x: vec3 = vec3(1, 2, 3);
-    // let y = x;
-    // let z = 1.3;
-    // let w = vec3(z, 1.2, z);
-    // vec2(1, 2);
+    // Type inferrence
+    let w = bvec3(true, true, false);
+    let x = vec2(1, 2);
+    let y = vec4(1, 2, 3, 4);
+
+    // Extension
+    let z = ivec2(1); // == ivec2(1, 1)
+
+    let a = x;
+    a += 3;
+
+    // Using expressions
+    let b = 1.3;
+    let c = vec3(b, 1.2 * 3., float_function(y)) / 3.;
+    let d = vec3(3.1, vec2(3.2));
+
+    // From smaller vecs
+    let another = vec3(x, 1.);
+    let more = vec4(another, 1.);
+    let more2 = vec4(x, x);
+    let more3 = vec4(x, 1., 1.);
+}
+
+fn swizzling() {
+    // Building vecs from swizzles
+    let a = vec3(2.);
+    let b = vec4(a.x, a);
+    let c = a.xy;
+    let d = vec4(a.yz, c.yy);
+    let e = b + d;
+    let f = a + 1;
+    let g = a.x * 3. + 3.;
+
+    // Vec component assignment
+    a.z = 2;
+    a.xy += vec2(1., 2.);
+    a.xyz *= 2;
+    a.xz = vec2(1.);
+    a.x = a.y - 2;
+    // a.xy = 2;  <- cannot assign a vec2 to a single int
+    // a.xx = 2; <- cannot assign the same component multiple times
 }
 
 fn loops() {

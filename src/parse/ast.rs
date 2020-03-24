@@ -29,6 +29,13 @@ pub enum Item {
 }
 
 #[derive(Debug, Clone)]
+pub enum FuncParamQualifier {
+    In,
+    Out,
+    InOut,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expression {
     Literal(Literal),
     Identifier(String),
@@ -63,8 +70,8 @@ pub struct FunctionCall {
 
 #[derive(Debug, Clone)]
 pub struct Constructor {
-    pub ty: String,
     pub fields: Vec<(String, Expression)>,
+    pub ty: String,
 }
 
 #[derive(Debug, Clone)]
@@ -105,8 +112,8 @@ pub enum AssignmentOperator {
 #[derive(Debug, Clone)]
 pub enum Statement {
     Let {
-        ident: String,
         tag: Option<Tag>,
+        ident: String,
         ty: Option<String>,
         expression: Option<Expression>,
     },
@@ -145,7 +152,7 @@ pub enum IdentOrMember {
 
 #[derive(Debug, Clone)]
 pub struct Member {
-    // ident.function.ident.function etc.
+    // ident.function().ident.function() etc.
     pub path: Vec<IdentOrFunction>,
     // The final item's type
     pub ty: String,
@@ -168,24 +175,10 @@ pub enum Tag {
 #[derive(Debug, Clone)]
 /// GLSL Types
 pub enum Literal {
-    Vector(Vector),
     Float(f32),
     Double(f64),
     // FIXME: Type should default to i64, then decide on i/u 32 later (for parsing)
     Int(i32),
     UInt(u32),
     Bool(bool),
-}
-
-#[derive(Debug, Clone)]
-pub enum Vector {
-    Vec2(IdentOrLiteral, IdentOrLiteral),
-    Vec3(IdentOrLiteral, IdentOrLiteral, IdentOrLiteral),
-    Vec4(IdentOrLiteral, IdentOrLiteral, IdentOrLiteral, IdentOrLiteral),
-}
-
-#[derive(Debug, Clone)]
-pub enum IdentOrLiteral {
-    Ident(String),
-    Literal(Box<Literal>),
 }

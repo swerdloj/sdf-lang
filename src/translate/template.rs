@@ -217,21 +217,6 @@ pub fn translate_expression(expr: &Expression) -> String {
     match expr {
         Expression::Literal(literal) => {
             match literal {
-                Literal::Vector(vec) => {
-                    let translate = |i: &IdentOrLiteral| {match i { IdentOrLiteral::Ident(ident) => ident.to_owned(),
-                                                                                    IdentOrLiteral::Literal(lit) => translate_expression(&Expression::Literal(*lit.clone())).to_owned(), }};
-                    match vec {
-                        Vector::Vec2(f1, f2) => {
-                            glsl.push_str(&format!("vec2({}, {})", translate(f1), translate(f2)));
-                        }
-                        Vector::Vec3(f1, f2, f3) => {
-                            glsl.push_str(&format!("vec2({}, {}, {})", translate(f1), translate(f2), translate(f3)));
-                        }
-                        Vector::Vec4(f1, f2, f3, f4) => {
-                            glsl.push_str(&format!("vec2({}, {}, {}, {})", translate(f1), translate(f2), translate(f3), translate(f4)));
-                        }
-                    }
-                }
                 Literal::Float(f) => {
                     glsl.push_str(&f.to_string());
                 }

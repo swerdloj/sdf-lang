@@ -3,6 +3,7 @@ pub mod template;
 use crate::exit_with_message;
 use crate::parse::ast::*;
 use crate::parse::context::Context;
+use crate::parse::glsl_types;
 
 // The parser generates an AST from the bottom up. This is an issue because expressions
 // such as `if` will be parsed *after* the statements *within* the `if.
@@ -25,7 +26,7 @@ pub fn validate(ast: &mut AST, context: &mut Context) -> () {
                 context.scopes.push_scope("function");
 
                 for (param_name, param_type) in parameters {
-                    context.scopes.add_var_to_scope(param_name.clone(), param_type.clone());
+                    context.add_var_to_scope(param_name.clone(), param_type.clone());
                 }
 
                 for statement in statements {
@@ -61,7 +62,7 @@ pub fn validate(ast: &mut AST, context: &mut Context) -> () {
                             context.scopes.push_scope("impl");
 
                             for (param_name, param_type) in parameters {
-                                context.scopes.add_var_to_scope(param_name.clone(), param_type.clone());
+                                context.add_var_to_scope(param_name.clone(), param_type.clone());
                             }
 
                             for statement in statements {
@@ -145,11 +146,11 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
 
             *ty = checked_type.clone();
 
-            context.scopes.add_var_to_scope(ident.clone(), checked_type.unwrap());
+            context.add_var_to_scope(ident.clone(), checked_type.unwrap());
         }
 
         Statement::LetConstructor { ident, constructor } => {
-            context.scopes.add_var_to_scope(ident.clone(), constructor.ty.clone());
+            context.add_var_to_scope(ident.clone(), constructor.ty.clone());
             
             for (_ident, field) in &mut constructor.fields {
                 validate_expression(field, context);
@@ -160,7 +161,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
         }
 
         // The 'op' should not influence anything here
-        Statement::Assignment { lhs, op: _, expression } => {
+        Statement::Assignment { lhs, op, expression } => {
             let mut lhs_type = String::from("temp");
 
             match lhs {
@@ -177,7 +178,13 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                                 if lhs_type == "temp" {
                                     lhs_type = context.scopes.var_type(ident);
                                 } else {
-                                    lhs_type = context.struct_field_type(&lhs_type, ident);
+                                    // Check if lhs is the field of a vec
+                                    if glsl_types::vec::is_vec_constructor_or_type(&lhs_type) {
+                                        // Ensure that swizzle is op-assignment valid (can be more than length 1)
+                                        lhs_type = glsl_types::vec::validate_swizzle_for_assignment(&lhs_type, ident);
+                                    } else {   
+                                        lhs_type = context.struct_field_type(&lhs_type, ident);
+                                    }
                                 }
                             }
 
@@ -194,8 +201,21 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             validate_expression(expression, context);
             let expr_type = context.expression_type(expression);
 
-            if !Context::castable(&expr_type, &lhs_type) {
-                exit_with_message(format!("Error: Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &expr_type));
+            let result_type = match op {
+                AssignmentOperator::Assign => {
+                    expr_type
+                }
+
+                _ => {                    
+                    // The result of (lhs op rhs) should be castable to the type of (lhs)
+                    // This is useful for types like 'vec' where (lhs op rhs) is not always obvious
+                    context.add_type(&lhs_type, &expr_type)
+                    
+                }
+            };
+
+            if !Context::castable(&result_type, &lhs_type) {
+                exit_with_message(format!("Error: Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &result_type));
             }
         }
 
@@ -214,7 +234,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             let to_type = context.expression_type(to);
 
             if (from_type == "int" || from_type == "uint") && (to_type == "int" || to_type == "uint") {
-                context.scopes.add_var_to_scope(loop_var.clone(), "int".to_owned());
+                context.add_var_to_scope(loop_var.clone(), "int".to_owned());
             } else {
                 exit_with_message("Error: For loops only support integers for now".to_owned());
             }
@@ -292,7 +312,15 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                             // First item must be a variable. Following would be fields.
                             current_type = context.scopes.var_type(ident);
                         } else {
-                            current_type = context.struct_field_type(&current_type, ident);
+                            // If vec type, follow swizzle rules
+                            if glsl_types::vec::is_vec_constructor_or_type(&current_type) {
+                                // Get the type of the swizzle
+                                current_type = glsl_types::vec::validate_swizzle(&current_type, &ident);
+                            } 
+                            // Otherwise, it is just a normal field
+                            else {
+                                current_type = context.struct_field_type(&current_type, ident);
+                            }
                         }
                         last_ident = ident.clone();
                     }
@@ -361,8 +389,8 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                         Expression::Identifier(type_name) => {
                             if context.is_primitive(&type_name) {
                                 // TODO: Is this correct? Always required for narrowing conversions anyway
-                                // if Context::castable(&lhs_type, &type_name) {
-                                if true {
+                                if Context::narrow_castable(&lhs_type, &type_name) {
+                                // if true {
                                     *ty = type_name.to_owned();
                                 } else {
                                     exit_with_message(format!("Error: Cannot cast from type '{}' to '{}'", &lhs_type, &type_name));
@@ -373,7 +401,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                         }
 
                         _ => {
-                            panic!("This cannot be reached");
+                            exit_with_message(format!("Can only cast to type name, not an expression"));
                         }
                     }
                 }
@@ -413,7 +441,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
         }
 
         Expression::Literal(_lit) => {
-
+            // Nothing to do here
         }
 
         Expression::Identifier(ident) => {

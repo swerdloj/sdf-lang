@@ -1,8 +1,8 @@
 use crate::exit_with_message;
+use crate::parse::ast;
+use super::glsl_types::{vec};
 
 use std::collections::{HashMap, HashSet};
-
-use crate::parse::ast;
 
 // See https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)
 
@@ -31,6 +31,7 @@ pub struct Scope {
     current: usize,
 }
 
+// TODO: Wrap these in checks and call them from context.name rather than context.scopes.name
 impl Scope {
     fn new() -> Self {
         let mut scopes = HashMap::new();
@@ -64,7 +65,7 @@ impl Scope {
         self.current -= 1;
     }
 
-    pub fn add_var_to_scope(&mut self, name: String, ty: String) {
+    fn add_var_to_scope(&mut self, name: String, ty: String) {
         // println!("Adding '{}' to nested scope {}", &name, self.current);
         if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), ty) {
             exit_with_message(format!("Error: Variable '{}' already exists in the current scope", name));
@@ -152,6 +153,14 @@ impl Context {
         }
     }
 
+    pub fn add_var_to_scope(&mut self, name: String, ty: String) {
+        if self.is_primitive(&name) {
+            exit_with_message(format!("Error: Cannot name variable as primitive type '{}'", name));
+        }
+
+        self.scopes.add_var_to_scope(name, ty);
+    }
+
     pub fn is_primitive(&self, type_name: &str) -> bool {
         self.primitive_types.contains(type_name)
     }
@@ -177,6 +186,10 @@ impl Context {
     }
 
     pub fn declare_struct(&mut self, name: String, fields: Vec<(String, String, Option<ast::Expression>)>) {       
+        if self.is_primitive(&name) {
+            exit_with_message(format!("Error: Cannot name struct '{}' the same as a primitive type", &name));
+        }
+        
         let signature = StructSignature {
             name: name.clone(),
             fields: fields.iter().map(|(field, ty, default)|
@@ -272,6 +285,10 @@ impl Context {
     }
 
     pub fn declare_function(&mut self, name: String, parameters: Vec<(String, String)>, ty: String) {
+        if self.is_primitive(&name) {
+            exit_with_message(format!("Error: Cannot name function as primitive type '{}'", name));
+        }
+        
         let signature = FunctionSignature {
             name: name.clone(),
             parameters: parameters.iter().map(|(field, ty)| 
@@ -285,7 +302,14 @@ impl Context {
         }
     }
 
+    /// Validates a function call, returning the function's type.
+    /// 
+    /// Constructs vector types similarly.
     pub fn check_function_call(&self, name: &str, passed_param_types: Vec<String>) -> String {
+        if vec::is_vec_constructor_or_type(name) {
+            return vec::validate_constructor(name, &passed_param_types);
+        }
+        
         if let Some(function) = self.functions.get(name) {
             if function.parameters.len() != passed_param_types.len() {
                 exit_with_message(format!("The function '{}' takes {} parameters, but {} were supplied", name, function.parameters.len(), passed_param_types.len()));
@@ -305,12 +329,52 @@ impl Context {
         }
     }
 
-    // TODO: Require all narrowing conversions to have explicit casts
-    // TODO: Implement explcit casting
+    /// Whether a narrowing conversion via 'as' is valid
+    pub fn narrow_castable(from: &str, to: &str) -> bool {
+        if from == to {
+            return true;
+        }
+
+        match from {
+            "double" => {
+                match to {
+                    "float" | "int" | "uint" => true,
+                    _ => false,
+                }
+            }
+            
+            "float" => {
+                match to {
+                    "double" | "int" | "uint" => true,
+                    _ => false,
+                }
+            }
+
+            "int" => {
+                match to {
+                    "float" | "double" | "uint" => true,
+                    _ => false,
+                }
+            }
+
+            "uint" => {
+                match to {
+                    "float" | "int" | "double" => true,
+                    _ => false,
+                }
+            }
+
+            _ => false,
+        }
+    }
+
+    /// Whether types can be implicitly cast (non-narrowing cast)
     pub fn castable(from: &str, to: &str) -> bool {
         if from == to {
             return true;
         }
+
+        // TODO: Implement vec casts? Like uvec to ivec, etc.
 
         match to {
             "double" => {
@@ -400,12 +464,63 @@ impl Context {
                 }
             }
 
-            // TODO: Remaining types (vecs, etc.)
-
-            "vec2" | "vec3" | "vec4" => {
+            v @ "dvec2" | v @ "dvec3" | v @ "dvec4" => {
                 match right_type {
-                    "float" | "int" | "uint" => "vec3",
-                    _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
+                    "double" | "float" | "int" | "uint" => v,
+                    r => {
+                        if v == r {
+                            v
+                        } else {
+                            exit_with_message(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            unreachable!();
+                        }
+                    }
+                    // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
+                }
+            }
+
+            v @ "vec2" | v @ "vec3" | v @ "vec4" => {
+                match right_type {
+                    "float" | "int" | "uint" => v,
+                    r => {
+                        if v == r {
+                            v
+                        } else {
+                            exit_with_message(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            unreachable!();
+                        }
+                    }
+                    // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
+                }
+            }
+
+            v @ "ivec2" | v @ "ivec3" | v @ "ivec4" => {
+                match right_type {
+                    "int" | "uint" => v,
+                    r => {
+                        if v == r {
+                            v
+                        } else {
+                            exit_with_message(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            unreachable!();
+                        }
+                    }
+                    // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
+                }
+            }
+
+            v @ "uvec2" | v @ "uvec3" | v @ "uvec4" => {
+                match right_type {
+                    "uint" => v,
+                    r => {
+                        if v == r {
+                            v
+                        } else {
+                            exit_with_message(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            unreachable!();
+                        }
+                    }
+                    // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
                 }
             }
 
@@ -427,12 +542,16 @@ impl Context {
         match type_name {
             "uint" => "int".to_owned(),
 
-            "bool" => {
-                exit_with_message("Cannot negate a boolean".to_owned());
+            "uvec2" => "ivec2".to_owned(),
+            "uvec3" => "ivec3".to_owned(),
+            "uvec4" => "ivec4".to_owned(),
+
+            "bool" | "bvec2" | "bvec3" | "bvec4" => {
+                exit_with_message("Cannot negate boolean types".to_owned());
                 unreachable!();
             }
 
-            // double, float, vec2, vec3, vec4, etc.
+            // double, float, int, vec2, vec3, vec4, etc.
             x => {
                 if self.structs.contains_key(x) {
                     exit_with_message("Only numeric types can be negated".to_owned());
@@ -473,16 +592,6 @@ impl Context {
                     
                     ast::Literal::UInt(_) => {
                         "uint"
-                    }
-
-                    ast::Literal::Vector(vec) => {
-                        // TODO: The rest
-                        
-                        match vec {
-                            ast::Vector::Vec2(_, _) => "vec2",
-                            ast::Vector::Vec3(_, _, _) => "vec3",
-                            ast::Vector::Vec4(_, _, _, _) => "vec4",
-                        }
                     }
                     
                     x => {
