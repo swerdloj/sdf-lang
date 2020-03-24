@@ -18,7 +18,6 @@ impl SomeStruct {
     }
 
     fn member_stuff(self) {
-        self.field1;
         // Inferred from field
         let x = self.field1 + 3;
         // Inferred from member
@@ -26,7 +25,7 @@ impl SomeStruct {
 
         self.some_function(1.);
         
-        self.no_default += 3 - self.no_final_comma;
+        self.field1 += 3 - self.no_final_comma;
     }
 }
 
@@ -67,6 +66,7 @@ fn void_function() {
     let z = 7;
     // Narrowing conversions require explicit casts
     let a: int = 123.2 as int;
+    a += 0.5 as int;
 }
 
 fn int_function() -> int {

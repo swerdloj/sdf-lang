@@ -38,6 +38,11 @@ pub fn validate(ast: &mut AST, context: &mut Context) -> () {
             // TODO: 'self' parameter should be marked as 'inout'
             Item::Implementation { struct_name, functions  } => {
                 context.validate_type(struct_name);
+                context.declare_implementation(struct_name);
+
+                if functions.len() == 0 {
+                    exit_with_message(format!("Error: To implement '{}', at least one function is needed", struct_name));
+                }
 
                 for function in functions {
                     match function {
@@ -154,7 +159,8 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             constructor.fields = context.generate_constructor(&constructor.ty, constructor.fields.clone());
         }
 
-        Statement::Assignment { lhs, op, expression } => {
+        // The 'op' should not influence anything here
+        Statement::Assignment { lhs, op: _, expression } => {
             let mut lhs_type = String::from("temp");
 
             match lhs {
@@ -450,7 +456,7 @@ pub fn translate(ast: &AST, context: &Context) -> String {
                 glsl.push_str(&translate_scene(name, statements));
             }
 
-            Item::Implementation { struct_name, functions } => {
+            Item::Implementation { struct_name: _, functions } => {
                 for function in functions {
                     match function {
                         Item::Function { name, parameters, return_type, statements } => {

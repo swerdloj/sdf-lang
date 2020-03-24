@@ -10,6 +10,7 @@ struct StructSignature {
     name: String,
     // Fields and types with optional defaults (field, type, default)
     fields: Vec<(String, String, Option<ast::Expression>)>,
+    has_implementation: bool,
 }
 
 struct FunctionSignature {
@@ -181,10 +182,23 @@ impl Context {
             fields: fields.iter().map(|(field, ty, default)|
                         ( field.clone(), self.validate_type(ty), default.clone() )
                     ).collect(),
+            has_implementation: false,
         };
 
         if let Some(old) = self.structs.insert(name, signature) {
             exit_with_message(format!("Error: Struct '{}' was declared multiple times", old.name));
+        }
+    }
+
+    pub fn declare_implementation(&mut self, struct_name: &str) {
+        if let Some(signature) = self.structs.get_mut(struct_name) {
+            if !signature.has_implementation {
+                signature.has_implementation = true;
+            } else {
+                exit_with_message(format!("Error: Struct '{}' already has an implementation.", struct_name));
+            }
+        } else {
+            exit_with_message(format!("Error: No such struct exists, '{}'", struct_name));
         }
     }
 

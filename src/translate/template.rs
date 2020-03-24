@@ -299,6 +299,8 @@ pub fn translate_expression(expr: &Expression) -> String {
             });
         }
 
+        // TODO: When validating, should re-order these so any chained combination
+        //       can translate simply
         Expression::Member(member) => {
             for item in &member.path {
                 match item {
@@ -307,7 +309,6 @@ pub fn translate_expression(expr: &Expression) -> String {
                     }
                     
                     IdentOrFunction::Function(func) => {
-                        // TODO: Need to compose functions with what came previously (and remove previous ident)
                         glsl.push_str(&translate_expression(&Expression::FunctionCall(func.clone())));
                     }
                 }

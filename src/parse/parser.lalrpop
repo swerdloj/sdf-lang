@@ -1,4 +1,4 @@
-use crate::parse::{context::Context, ast};
+use crate::parse::ast;
 use crate::exit_with_message;
 
 grammar();
@@ -7,6 +7,7 @@ grammar();
 match {
     // Do not allow "true" or "false" as identifiers. Make them literals.
     r"(true)|(false)" => BOOL,
+    // Special case
     r"[a-z]?(vec)[1-4]" => VEC_IDENTIFIER,
 
     // Ignore comments
@@ -47,10 +48,6 @@ Scene: ast::Item = {
 
 Implementation: ast::Item = {
     "impl" <id:Ident> "{" <functions:Function*> "}" => {
-        if functions.len() == 0 {
-            exit_with_message(format!("Error: To implement '{}', at least one function is needed", &id));
-        }
-
         ast::Item::Implementation {
             struct_name: id,
             functions,
