@@ -336,7 +336,7 @@ fn validate_single_param(function: &str, ty: &str) -> String {
         "normalize"
         => {
             if castable(ty, "float") {
-                return ty.to_owned();
+                return "float".to_owned();
             }
 
             match ty {
@@ -350,7 +350,7 @@ fn validate_single_param(function: &str, ty: &str) -> String {
 
         "length" => {
             if castable(ty, "float") {
-                return ty.to_owned();
+                return "float".to_owned();
             }
 
             match ty {
