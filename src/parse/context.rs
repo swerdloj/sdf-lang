@@ -1,6 +1,7 @@
 use crate::exit_with_message;
 use crate::parse::ast;
-use super::glsl_types::{vec};
+use super::glsl::castable;
+use super::glsl;
 
 use std::collections::{HashMap, HashSet};
 
@@ -97,10 +98,13 @@ impl Scope {
 pub struct Context {
     /// Function name -> Function signature
     functions: HashMap<String, FunctionSignature>,
+
     /// Struct name -> Struct fields/defaults
     structs: HashMap<String, StructSignature>,
+
     /// Primitives such as int, uint, bool, etc.
     primitive_types: HashSet<&'static str>,
+
     /// Collection of user-declared uniforms, their types, and defaults
     // TODO: Default value is not implemented yet
     // TODO: Implement the scope for tagged variables (and allow shadowing?)
@@ -257,7 +261,7 @@ impl Context {
         for (field_name, field_type, default) in &signature.fields {
             if let Some(user_supplied) = supplied.get(field_name) {
                 // Ensure types are compatible
-                if !Self::castable(&self.expression_type(user_supplied), field_type) {
+                if !castable(&self.expression_type(user_supplied), field_type) {
                     exit_with_message(format!("Error: The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(user_supplied)));
                 }
 
@@ -275,16 +279,20 @@ impl Context {
         constructor
     }
 
-    pub fn function_type(&self, name: &str) -> String {
-        if let Some(function) = self.functions.get(name) {
-            function.return_type.clone()
-        } else {
-            exit_with_message(format!("Error: No such function exists: '{}'", name));
-            unreachable!();
-        }
-    }
+    // pub fn function_type(&self, name: &str) -> String {
+    //     if let Some(function) = self.functions.get(name) {
+    //         function.return_type.clone()
+    //     } else {
+    //         exit_with_message(format!("Error: No such function exists: '{}'", name));
+    //         unreachable!();
+    //     }
+    // }
 
     pub fn declare_function(&mut self, name: String, parameters: Vec<(String, String)>, ty: String) {
+        if glsl::functions::is_builtin(&name) {
+            exit_with_message(format!("Error: A builtin function, '{}' exists with the same name", &name));
+        }
+        
         if self.is_primitive(&name) {
             exit_with_message(format!("Error: Cannot name function as primitive type '{}'", name));
         }
@@ -303,11 +311,13 @@ impl Context {
     }
 
     /// Validates a function call, returning the function's type.
-    /// 
     /// Constructs vector types similarly.
     pub fn check_function_call(&self, name: &str, passed_param_types: Vec<String>) -> String {
-        if vec::is_vec_constructor_or_type(name) {
-            return vec::validate_constructor(name, &passed_param_types);
+        if glsl::vec::is_vec_constructor_or_type(name) {
+            return glsl::vec::validate_constructor(name, &passed_param_types);
+        }
+        else if glsl::functions::is_builtin(name) {
+            return glsl::functions::validate_function(name, &passed_param_types);
         }
         
         if let Some(function) = self.functions.get(name) {
@@ -316,7 +326,7 @@ impl Context {
             }
 
             for ((param_name, param_type), passed_type) in function.parameters.iter().zip(passed_param_types.iter()) {
-                if !Self::castable(passed_type, param_type) {
+                if !castable(passed_type, param_type) {
                     exit_with_message(format!("The parameter '{}' in function '{}' takes a '{}', but a '{}' was given (cannot cast)",
                                                         param_name, name, param_type, passed_type));
                 }
@@ -326,96 +336,6 @@ impl Context {
         } else {
             exit_with_message(format!("The function '{}' was not found", name));
             unreachable!();
-        }
-    }
-
-    /// Whether a narrowing conversion via 'as' is valid
-    pub fn narrow_castable(from: &str, to: &str) -> bool {
-        if from == to {
-            return true;
-        }
-
-        match from {
-            "double" => {
-                match to {
-                    "float" | "int" | "uint" => true,
-                    _ => false,
-                }
-            }
-            
-            "float" => {
-                match to {
-                    "double" | "int" | "uint" => true,
-                    _ => false,
-                }
-            }
-
-            "int" => {
-                match to {
-                    "float" | "double" | "uint" => true,
-                    _ => false,
-                }
-            }
-
-            "uint" => {
-                match to {
-                    "float" | "int" | "double" => true,
-                    _ => false,
-                }
-            }
-
-            _ => false,
-        }
-    }
-
-    /// Whether types can be implicitly cast (non-narrowing cast)
-    pub fn castable(from: &str, to: &str) -> bool {
-        if from == to {
-            return true;
-        }
-
-        // TODO: Implement vec casts? Like uvec to ivec, etc.
-
-        match to {
-            "double" => {
-                match from {
-                    "float" | "int" | "uint" => true,
-                    _ => false,
-                }
-            }
-
-            "float" => {
-                match from {
-                    "int" | "uint" => true,
-                    _ => false,
-                }
-            }
-
-            "int" => {
-                match from {
-                    "uint" => true,
-                    _ => false,
-                }
-            }
-
-            "uint" => {
-                match from {
-                    "int" => true,
-                    _ => false,
-                }
-            }
-
-            "bool" => {
-                match from {
-                    "double" | "fload" | "int" | "uint" => false,
-                    _ => false,
-                }
-            }
-
-            x => {
-                exit_with_message(format!("Type '{}' has no cast implementations. Cannot cast from '{}' to '{}'.", x, from, to));
-                unreachable!();
-            }
         }
     }
 

@@ -9,6 +9,7 @@ pub mod environment;
 pub mod parse;
 pub mod translate;
 
+// TODO: Make this a macro that also places an `unimplemented!()` for convenience
 #[allow(unreachable_code)]
 pub fn exit_with_message(message: String) {
     #[cfg(not(test))]

@@ -3,7 +3,7 @@ pub mod template;
 use crate::exit_with_message;
 use crate::parse::ast::*;
 use crate::parse::context::Context;
-use crate::parse::glsl_types;
+use crate::parse::glsl;
 
 // The parser generates an AST from the bottom up. This is an issue because expressions
 // such as `if` will be parsed *after* the statements *within* the `if.
@@ -122,7 +122,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                 // Check whether type assigned is compatible with user-specified
                 if let Some(assignment) = expression {                    
                     let assigned_type = context.expression_type(assignment);
-                    if !Context::castable(&assigned_type, &specified_type) {
+                    if !glsl::castable(&assigned_type, &specified_type) {
                         exit_with_message(format!("Error: Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
                                                    &ident, &specified_type, &assigned_type));
                         unreachable!();
@@ -179,9 +179,9 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                                     lhs_type = context.scopes.var_type(ident);
                                 } else {
                                     // Check if lhs is the field of a vec
-                                    if glsl_types::vec::is_vec_constructor_or_type(&lhs_type) {
+                                    if glsl::vec::is_vec_constructor_or_type(&lhs_type) {
                                         // Ensure that swizzle is op-assignment valid (can be more than length 1)
-                                        lhs_type = glsl_types::vec::validate_swizzle_for_assignment(&lhs_type, ident);
+                                        lhs_type = glsl::vec::validate_swizzle_for_assignment(&lhs_type, ident);
                                     } else {   
                                         lhs_type = context.struct_field_type(&lhs_type, ident);
                                     }
@@ -214,7 +214,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                 }
             };
 
-            if !Context::castable(&result_type, &lhs_type) {
+            if !glsl::castable(&result_type, &lhs_type) {
                 exit_with_message(format!("Error: Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &result_type));
             }
         }
@@ -313,9 +313,9 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                             current_type = context.scopes.var_type(ident);
                         } else {
                             // If vec type, follow swizzle rules
-                            if glsl_types::vec::is_vec_constructor_or_type(&current_type) {
+                            if glsl::vec::is_vec_constructor_or_type(&current_type) {
                                 // Get the type of the swizzle
-                                current_type = glsl_types::vec::validate_swizzle(&current_type, &ident);
+                                current_type = glsl::vec::validate_swizzle(&current_type, &ident);
                             } 
                             // Otherwise, it is just a normal field
                             else {
@@ -348,7 +348,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                 }
             }
 
-            to_remove.into_iter().rev().map(|index| member.path.remove(index)).for_each(drop);
+            to_remove.into_iter().rev().for_each(|index| {member.path.remove(index);});
 
             member.ty = current_type;
         }
@@ -389,7 +389,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                         Expression::Identifier(type_name) => {
                             if context.is_primitive(&type_name) {
                                 // TODO: Is this correct? Always required for narrowing conversions anyway
-                                if Context::narrow_castable(&lhs_type, &type_name) {
+                                if glsl::narrow_castable(&lhs_type, &type_name) {
                                 // if true {
                                     *ty = type_name.to_owned();
                                 } else {

@@ -1,9 +1,10 @@
-use crate::parse::context::Context;
+use super::castable;
 use crate::exit_with_message;
 
 // TODO: Add the remaining vec types
 
-/// Returns whether a function is actually a vec constructor
+/// Returns whether a function is actually a vec constructor.
+/// Can also be used to check if a type is a vec type
 pub fn is_vec_constructor_or_type(fn_name: &str) -> bool {
     match fn_name {
         "bvec2" | "bvec3" | "bvec4" |
@@ -109,7 +110,7 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> String {
     }
     
     // Special case for 'vec3(1.)' or similar
-    if num_args == 1 && Context::castable(&passed[0], vec_primitive_type(vec_type)) {
+    if num_args == 1 && castable(&passed[0], vec_primitive_type(vec_type)) {
         return vec_type.to_owned();
     }
 
@@ -118,7 +119,7 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> String {
             if num_args > 2 {
                 exit_with_message(format!("Error: Too many arguments for '{}'", vec_type));
             }
-            if !Context::castable(&passed[0], primitive) || !Context::castable(&passed[1], primitive) {
+            if !castable(&passed[0], primitive) || !castable(&passed[1], primitive) {
                 exit_with_message(format!("Error: Both '{}' arguments must be castable to '{}'", vec_type, primitive));
             }
         }
@@ -133,13 +134,13 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> String {
 
             // vec3 can be made of one vec2 and one primitive
             if num_args == 2 && 
-                ! ( passed[0] == v2 && Context::castable(&passed[1], primitive)
-                ||  passed[1] == v2 && Context::castable(&passed[0], primitive) ) 
+                ! ( passed[0] == v2 && castable(&passed[1], primitive)
+                ||  passed[1] == v2 && castable(&passed[0], primitive) ) 
             {
                 exit_with_message(format!("Error: '{}' can be built from only one '{}' and one '{}' or three '{}'s", vec_type, v2, primitive, primitive));
             }
 
-            if num_args == 3 && !(Context::castable(&passed[0], primitive) && Context::castable(&passed[1], primitive) && Context::castable(&passed[2], primitive)) {
+            if num_args == 3 && !(castable(&passed[0], primitive) && castable(&passed[1], primitive) && castable(&passed[2], primitive)) {
                 exit_with_message(format!("Error: All three '{}' arguments must be castable to '{}'", vec_type, primitive));
             }
         }
@@ -158,25 +159,25 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> String {
             // vec4 can be made of one vec3 and one primitive
             // or two vec2s
             if num_args == 2 && 
-                ! ( passed[0] == v3 && Context::castable(&passed[1], primitive)
-                ||  passed[1] == v3 && Context::castable(&passed[0], primitive) 
+                ! ( passed[0] == v3 && castable(&passed[1], primitive)
+                ||  passed[1] == v3 && castable(&passed[0], primitive) 
                 ||  passed[0] == v2 && passed[1] == v2 ) 
             {
                 exit_with_message(format!("Error: '{}' can be built from only two '{}'s, one '{}' and two '{}'s, one '{}' and one '{}', or four '{}'s", vec_type, v2, v2, primitive, v3, primitive, primitive));
             }
             
             // vec4 cn be made of one vec2 and two primitives
-            if num_args == 3 && !(  (passed[0] == v2 && Context::castable(&passed[1], primitive) && Context::castable(&passed[2], primitive)) 
-            || (passed[1] == v2 && Context::castable(&passed[0], primitive) && Context::castable(&passed[2], primitive))  
-            || (passed[2] == v2 && Context::castable(&passed[0], primitive) && Context::castable(&passed[1], primitive)) )
+            if num_args == 3 && !(  (passed[0] == v2 && castable(&passed[1], primitive) && castable(&passed[2], primitive)) 
+            || (passed[1] == v2 && castable(&passed[0], primitive) && castable(&passed[2], primitive))  
+            || (passed[2] == v2 && castable(&passed[0], primitive) && castable(&passed[1], primitive)) )
             {
                 exit_with_message(format!("Error: '{}' can be built from only two '{}'s, one '{}' and two '{}'s, one '{}' and one '{}', or four '{}'s", vec_type, v2, v2, primitive, v3, primitive, primitive));
             }
 
             // vec4 can be made of four primitives
             if num_args == 4 && 
-              !(Context::castable(&passed[0], primitive) && Context::castable(&passed[1], primitive) 
-                && Context::castable(&passed[2], primitive) && Context::castable(&passed[3], primitive)) 
+              !(castable(&passed[0], primitive) && castable(&passed[1], primitive) 
+                && castable(&passed[2], primitive) && castable(&passed[3], primitive)) 
             {
                 exit_with_message(format!("Error: All four '{}' arguments must be castable to '{}'", vec_type, primitive))
             }

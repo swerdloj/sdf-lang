@@ -1,6 +1,6 @@
 pub mod ast;
 pub mod context;
-pub mod glsl_types;
+pub mod glsl;
 
 lalrpop_mod!(pub parser, "/parse/parser.rs");
 
