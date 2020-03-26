@@ -1,6 +1,6 @@
 pub mod template;
 
-use crate::exit_with_message;
+use crate::exit;
 use crate::parse::ast::*;
 use crate::parse::context::Context;
 use crate::parse::glsl;
@@ -42,7 +42,7 @@ pub fn validate(ast: &mut AST, context: &mut Context) -> () {
                 context.declare_implementation(struct_name);
 
                 if functions.len() == 0 {
-                    exit_with_message(format!("Error: To implement '{}', at least one function is needed", struct_name));
+                    exit!(format!("Error: To implement '{}', at least one function is needed", struct_name));
                 }
 
                 for function in functions {
@@ -51,7 +51,7 @@ pub fn validate(ast: &mut AST, context: &mut Context) -> () {
                             if parameters.len() > 0 {
                                 parameters[0] = ("self".to_owned(), format!("{}", struct_name));
                             } else {
-                                exit_with_message(format!("Error: Implementation function '{}.{}' must reference 'self'", struct_name, name));
+                                exit!(format!("Error: Implementation function '{}.{}' must reference 'self'", struct_name, name));
                             }
 
                             // Memeber functions are represented like so in GLSL
@@ -87,7 +87,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
     match statement {
         Statement::Continue | Statement::Break => {
             if !context.scopes.is_within_loop() {
-                exit_with_message(format!("Error: 'continue' and 'break' are only valid within a loop (found in a {})", context.scopes.current_kind()));
+                exit!(format!("Error: 'continue' and 'break' are only valid within a loop (found in a {})", context.scopes.current_kind()));
             }
         }
 
@@ -99,7 +99,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             // Tagged variables must have specified type and initial value
             if let Some(t) = tag {
                 if expression.is_none() {
-                    exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but not initialized", ident, t));
+                    exit!(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but not initialized", ident, t));
                 }
 
                 if let Some(specified_type) = ty {   
@@ -113,7 +113,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                         }
                     }
                 } else {
-                    exit_with_message(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but its type was not specified", ident, t));
+                    exit!(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but its type was not specified", ident, t));
                 }
             }
 
@@ -123,9 +123,8 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                 if let Some(assignment) = expression {                    
                     let assigned_type = context.expression_type(assignment);
                     if !glsl::castable(&assigned_type, &specified_type) {
-                        exit_with_message(format!("Error: Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
+                        exit!(format!("Error: Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
                                                    &ident, &specified_type, &assigned_type));
-                        unreachable!();
                     }
                 }
                 Some(specified_type.clone())
@@ -136,8 +135,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                     if expr_type != "void" {
                         Some(expr_type)
                     } else {
-                        exit_with_message(format!("Error: Variable '{}' was assigned type 'void'.", &ident));
-                        unreachable!();
+                        exit!(format!("Error: Variable '{}' was assigned type 'void'.", &ident));
                     }
                 } else {
                     None
@@ -190,7 +188,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
 
                             // TODO: Is this always true? Or are there cases where this would be valid?
                             IdentOrFunction::Function(func) => {
-                                exit_with_message(format!("Error: Cannot assign to '.' operator with function call '{}'", func.name));
+                                exit!(format!("Error: Cannot assign to '.' operator with function call '{}'", func.name));
                             }
                         }
                     }
@@ -215,7 +213,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             };
 
             if !glsl::castable(&result_type, &lhs_type) {
-                exit_with_message(format!("Error: Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &result_type));
+                exit!(format!("Error: Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &result_type));
             }
         }
 
@@ -236,7 +234,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             if (from_type == "int" || from_type == "uint") && (to_type == "int" || to_type == "uint") {
                 context.add_var_to_scope(loop_var.clone(), "int".to_owned());
             } else {
-                exit_with_message("Error: For loops only support integers for now".to_owned());
+                exit!("Error: For loops only support integers for now");
             }
 
             for statement in block {
@@ -248,7 +246,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
 
         Statement::While { condition, block } => {
             if context.expression_type(condition) != "bool" {
-                exit_with_message(format!("Error: While loop condition must be boolean."));
+                exit!("Error: While loop condition must be boolean.");
             }
 
             context.scopes.push_scope("loop");
@@ -288,7 +286,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                 }
                 UnaryOperator::Not => {
                     if context.expression_type(rhs) != "bool" {
-                        exit_with_message(format!("The binary not cannot be used on type '{}'", &ty));
+                        exit!(format!("The binary not cannot be used on type '{}'", &ty));
                     }
                     *ty = "bool".to_owned();
                 }
@@ -328,7 +326,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                     // Note that function calls cannot happen before identifiers
                     IdentOrFunction::Function(func) => {
                         if current_type == "temp" {
-                            exit_with_message(format!("Error: Member methods must be accessed via the '.' operator: '{}'", func.name));
+                            exit!(format!("Error: Member methods must be accessed via the '.' operator: '{}'", func.name));
                         }
                         func.name = format!("__{}__{}", current_type, func.name);
 
@@ -393,17 +391,14 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                                 // if true {
                                     *ty = type_name.to_owned();
                                 } else {
-                                    exit_with_message(format!("Error: Cannot cast from type '{}' to '{}'", &lhs_type, &type_name));
+                                    exit!(format!("Error: Cannot cast from type '{}' to '{}'", &lhs_type, &type_name));
                                 }
                             } else {
-                                exit_with_message(format!("Error: Cannot cast to non-primitive type, '{}'", &type_name));
+                                exit!(format!("Error: Cannot cast to non-primitive type, '{}'", &type_name));
                             }
                         }
 
-                        _ => {
-                            exit_with_message(format!("Can only cast to type name, not an expression"));
-                        }
-                    }
+                        _ => exit!("Can only cast to type name, not an expression"),                    }
                 }
             }
         }
@@ -434,7 +429,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
             // Condition must be type "bool"
             let expr_type = context.expression_type(expression);
             if expr_type != "bool" {
-                exit_with_message(format!("Error: 'If' condition must be of type 'bool', but got '{}'", expr_type));
+                exit!(format!("Error: 'If' condition must be of type 'bool', but got '{}'", expr_type));
             }
 
             // TODO: Expression type check and assignment
@@ -446,7 +441,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
 
         Expression::Identifier(ident) => {
             if !context.is_primitive(ident) && !context.scopes.is_var_in_scope(ident) {
-                exit_with_message(format!("Error: Identifier '{}' not found in scope", ident));
+                exit!(format!("Error: Identifier '{}' not found in scope", ident));
             }
         }
     }

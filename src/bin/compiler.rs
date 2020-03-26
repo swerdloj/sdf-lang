@@ -1,7 +1,7 @@
 extern crate sdf_lang;
 
 use sdf_lang::{
-    parse, environment, exit_with_message, translate
+    parse, environment, translate, exit,
 };
 
 fn main() -> Result<(), std::io::Error> {
@@ -16,7 +16,7 @@ fn main() -> Result<(), std::io::Error> {
 
     // Print any parse errors, then exit. Otherwise, return AST
     let mut ast = parse::parse(&input).map_err(|e| 
-        exit_with_message(format!("Parse Error: {}", e)) 
+        exit!(format!("Parse Error: {}", e)) 
     ).unwrap();
 
     translate::validate(&mut ast, &mut context);

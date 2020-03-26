@@ -1,4 +1,4 @@
-use crate::exit_with_message;
+use crate::exit;
 use super::castable;
 
 // see http://www.shaderific.com/glsl-functions
@@ -23,19 +23,14 @@ pub fn is_builtin(function: &str) -> bool {
 /// Workaround for overloaded methods within GLSL (sdf-lang does not support overloading)
 pub fn validate_function(function: &str, types: &Vec<String>) -> String {   
     match types.len() {
-        0 => {
-            exit_with_message(format!("Error: '{}' does not accept zero parameters", function));
-            unreachable!();
-        }
+        0 => exit!(format!("Error: '{}' does not accept zero parameters", function)),
+        
 
         1 => validate_single_param(function, &types[0]),
         2 => validate_two_params(function, types),
         3 => validate_three_params(function, types),
 
-        n => {
-            exit_with_message(format!("Error: Function '{}' does not accept {} parameters", function, n));
-            unreachable!();
-        }
+        n => exit!(format!("Error: Function '{}' does not accept {} parameters", function, n)),
     }
 }
 
@@ -57,14 +52,10 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> String {
             {
                 match t {
                     "float" | "vec2" | "vec3" | "vec4" => t.to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not accept type '{}'", function, &types[0]));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not accept type '{}'", function, &types[0])),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires all three parameters to be same type unless the second and third are floats", function));
-                unreachable!();
+                exit!(format!("Error: '{}' requires all three parameters to be same type unless the second and third are floats", function));
             }
         }
 
@@ -84,14 +75,10 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> String {
             {
                 match t {
                     "float" | "vec2" | "vec3" | "vec4" => t.to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not accept type '{}'", function, &types[0]));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not accept type '{}'", function, &types[0])),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires all three parameters to be same type unless the third is a float (got {:?})", function, types));
-                unreachable!();
+                exit!(format!("Error: '{}' requires all three parameters to be same type unless the third is a float (got {:?})", function, types));
             }
         }
 
@@ -108,14 +95,10 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> String {
             {
                 match t.as_ref() {
                     "float" | "vec2" | "vec3" | "vec4" => t.to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not accept type '{}'", function, &types[2]));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not accept type '{}'", function, &types[2])),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires all three parameters to be same type unless the first and second are floats", function));
-                unreachable!();
+                exit!(format!("Error: '{}' requires all three parameters to be same type unless the first and second are floats", function));
             }
         }
 
@@ -133,14 +116,10 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> String {
             if ((types[0] == types[1]) && (types[1] == types[2])) || can_cast {
                 match t.as_ref() {
                     "float" | "vec2" | "vec3" | "vec4" => t.to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not accept type '{}'", function, &types[0]));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not accept type '{}'", function, &types[0])),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires all three parameters to be same type", function));
-                unreachable!();
+                exit!(format!("Error: '{}' requires all three parameters to be same type", function));
             }
         }
 
@@ -155,14 +134,10 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> String {
             if (types[0] == types[1]) && castable(&types[2], "float") {
                 match t {
                     "float" | "vec2" | "vec3" | "vec4" => t.to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not accept type '{}'", function, &types[0]));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not accept type '{}'", function, &types[0])),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires two of the same types and a float for the third parameter", function));
-                unreachable!();
+                exit!(format!("Error: '{}' requires two of the same types and a float for the third parameter", function));
             }
         }
 
@@ -170,8 +145,7 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> String {
             if types[0] == "sampler2D" && types[1] == "vec2" && types[2] == "float" {
                 "vec4".to_owned()
             } else {
-                exit_with_message(format!("Error: '{}' with three parameters requires 'sampler2D', 'vec2', and 'float'. Found '{:?}'", function, types));
-                unreachable!();
+                exit!(format!("Error: '{}' with three parameters requires 'sampler2D', 'vec2', and 'float'. Found '{:?}'", function, types));
             }
         }
 
@@ -179,15 +153,11 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> String {
             if types[0] == "samplerCube" && types[1] == "vec2" && types[2] == "float" {
                 "vec4".to_owned()
             } else {
-                exit_with_message(format!("Error: '{}' with three parameters requires 'samplerCube', 'vec2', and 'float'. Found '{:?}'", function, types));
-                unreachable!();
+                exit!(format!("Error: '{}' with three parameters requires 'samplerCube', 'vec2', and 'float'. Found '{:?}'", function, types));
             }
         }
 
-        _ => {
-            exit_with_message(format!("Error: '{}' does not accept three parameters", function));
-            unreachable!();
-        }
+        _ => exit!(format!("Error: '{}' does not accept three parameters", function)),
     }
 }
 
@@ -198,8 +168,7 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> String {
             if types[0] == "sampler2D" && types[1] == "vec2" {
                 "vec4".to_owned()
             } else {
-                exit_with_message(format!("Error: '{}' with two parameters requires 'sampler2D' and 'vec2'. Found '{:?}'", function, types));
-                unreachable!();
+                exit!(format!("Error: '{}' with two parameters requires 'sampler2D' and 'vec2'. Found '{:?}'", function, types));
             }
         }
 
@@ -208,8 +177,7 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> String {
             if types[0] == "samplerCube" && types[1] == "vec3" {
                 "vec4".to_owned()
             } else {
-                exit_with_message(format!("Error: '{}' with two parameters requires 'samplerCube' and 'vec3'. Found '{:?}'", function, types));
-                unreachable!();
+                exit!(format!("Error: '{}' with two parameters requires 'samplerCube' and 'vec3'. Found '{:?}'", function, types));
             }
         }
 
@@ -218,8 +186,7 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> String {
             if types[0] == "vec3" && types[1] == "vec3" {
                 "vec3".to_owned()
             } else {
-                exit_with_message(format!("Error: '{}' accepts two of 'vec3'. Got {:?}", function, types));
-                unreachable!();
+                exit!(format!("Error: '{}' accepts two of 'vec3'. Got {:?}", function, types));
             }
         }
 
@@ -237,14 +204,10 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> String {
             if (types[0] == types[1]) || can_cast {
                 match t {
                     "float" | "vec2" | "vec3" | "vec4" => t.to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not work with types '{:?}'", function, types));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not work with types '{:?}'", function, types)),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires two of the same types", function));
-                unreachable!();
+                exit!(format!("Error: '{}' requires two of the same types", function));
             }
         }
 
@@ -262,14 +225,10 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> String {
             if (types[0] == types[1]) || can_cast {
                 match t {
                     "float" | "vec2" | "vec3" | "vec4" => "float".to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not work with types '{:?}'", function, types));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not work with types '{:?}'", function, types)),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires two of the same types", function));
-                unreachable!();
+                exit!(format!("Error: '{}' requires two of the same types", function));
             }
         }
 
@@ -284,14 +243,10 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> String {
             if (types[0] == types[1]) || castable(&types[1], "float") {
                 match t {
                     "float" | "vec2" | "vec3" | "vec4" => t.to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not work with types '{:?}'", function, types));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not work with types '{:?}'", function, types)),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires two of the same type unless the second parameter is a float", function));
-                unreachable!();
+                exit!(format!("Error: '{}' requires two of the same type unless the second parameter is a float", function));
             }
         }
 
@@ -306,21 +261,14 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> String {
             if (types[0] == types[1]) || castable(&types[0], "float") {
                 match t {
                     "float" | "vec2" | "vec3" | "vec4" => t.to_owned(),
-                    _ => {
-                        exit_with_message(format!("Error: '{}' does not work with types '{:?}'", function, types));
-                        unreachable!();
-                    }
+                    _ => exit!(format!("Error: '{}' does not work with types '{:?}'", function, types)),
                 }
             } else {
-                exit_with_message(format!("Error: '{}' requires two of the same types unless the first parameter is a float", function));
-                unreachable!();
+                exit!(format!("Error: '{}' requires two of the same types unless the first parameter is a float", function));
             }
         }
 
-        _ => {
-            exit_with_message(format!("Error: '{}' does not accept two parameters", function));
-            unreachable!();
-        }
+        _ => exit!(format!("Error: '{}' does not accept two parameters", function)),
     }
 }
 
@@ -341,10 +289,7 @@ fn validate_single_param(function: &str, ty: &str) -> String {
 
             match ty {
                 "float" | "vec2" | "vec3" | "vec4" => ty.to_owned(),
-                _ => {
-                    exit_with_message(format!("Error: '{}' does not work with type '{}'", function, ty));
-                    unreachable!();
-                }
+                _ => exit!(format!("Error: '{}' does not work with type '{}'", function, ty)),
             }
         }
 
@@ -355,16 +300,10 @@ fn validate_single_param(function: &str, ty: &str) -> String {
 
             match ty {
                 "float" | "vec2" | "vec3" | "vec4" => "float".to_owned(),
-                _ => {
-                    exit_with_message(format!("Error: '{}' does not work with type '{}'", function, ty));
-                    unreachable!();
-                }
+                _ => exit!(format!("Error: '{}' does not work with type '{}'", function, ty)),
             }
         }
 
-        _ => {
-            exit_with_message(format!("Error: '{}' does not accept one parameter", function));
-            unreachable!();
-        }
+        _ => exit!(format!("Error: '{}' does not accept one parameter", function)),
     }
 }

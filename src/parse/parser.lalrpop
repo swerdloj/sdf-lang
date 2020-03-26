@@ -1,5 +1,5 @@
 use crate::parse::ast;
-use crate::exit_with_message;
+use crate::exit;
 
 grammar();
 
@@ -88,12 +88,12 @@ FunctionParams: Vec<(String, String)> = {
         // FIXME: This whole thing is ugly, but it works
         if let Some(s) = self_single {
             if s != "self" {
-                exit_with_message(format!("Error: TODO: not 'self'"));
+                exit!("Error: TODO: not 'self'");
             }
             params.push(("self".to_owned(), "self".to_owned())); 
         } else if let Some(sc) = self_comma {
             if sc != "self" {
-                exit_with_message(format!("Error: TODO: not 'self'"));
+                exit!("Error: TODO: not 'self'");
             }
             params.push(("self".to_owned(), "self".to_owned())); 
         }
@@ -211,7 +211,7 @@ LetStatement: ast::Statement = {
     <tag:("@" <Tag>)?>
     "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => { 
         if ty.is_none() && expr.is_none() {
-            exit_with_message(format!("Error: Standalone let statements like 'let {};' are not yet implemented", &id));
+            exit!(format!("Error: Standalone let statements like 'let {};' are not yet implemented", &id));
         }
         
         ast::Statement::Let {
@@ -455,7 +455,7 @@ Ident: String = {
 
     <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => {
         if <>.len() >= 3 && <>[0..=2].to_owned() == "gl_".to_owned() {
-            exit_with_message(format!("Error: The identifier prefix 'gl_' is reserved (used in '{}')", <>));
+            exit!(format!("Error: The identifier prefix 'gl_' is reserved (used in '{}')", <>));
         } 
         
         // TODO: Reserve "__ident__..." for code generation

@@ -2,8 +2,6 @@ pub mod vec;
 pub mod mat;
 pub mod functions;
 
-use crate::exit_with_message;
-
 /// Whether a narrowing conversion via 'as' is valid
 pub fn narrow_castable(from: &str, to: &str) -> bool {
     if from == to {
@@ -87,9 +85,6 @@ pub fn castable(from: &str, to: &str) -> bool {
             }
         }
 
-        x => {
-            exit_with_message(format!("Type '{}' has no cast implementations. Cannot cast from '{}' to '{}'.", x, from, to));
-            unreachable!();
-        }
+        x => crate::exit!(format!("Type '{}' has no cast implementations. Cannot cast from '{}' to '{}'.", x, from, to)),
     }
 }

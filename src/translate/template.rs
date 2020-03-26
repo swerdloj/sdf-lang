@@ -1,5 +1,5 @@
 use crate::parse::ast::*;
-use crate::exit_with_message;
+use crate::exit;
 
 use std::collections::HashSet;
 
@@ -143,7 +143,7 @@ pub fn translate_statement(statement: &Statement) -> String {
         // TODO: Tagged variables should not be re-included here (handled elsewhere for global scope)
         Statement::Let { ident, ty, expression: expr, .. } => {           
             if ty.is_none() {
-                exit_with_message(format!("Error: The type of '{}' could not be determined. Consider annotating the type.", ident));
+                exit!(format!("Error: The type of '{}' could not be determined. Consider annotating the type.", ident));
             }
 
             glsl.push_str(&format!("{} {}", &ty.as_ref().unwrap(), ident));
