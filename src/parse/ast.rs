@@ -37,6 +37,7 @@ pub enum FuncParamQualifier {
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    Parenthesized(Box<Expression>),
     Literal(Literal),
     Identifier(String),
     Binary {

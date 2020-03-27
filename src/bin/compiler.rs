@@ -10,16 +10,14 @@ fn main() -> Result<(), std::io::Error> {
     // Note that file's existence will be checked already
     let input = std::fs::read_to_string(&env.input_path)?;
     println!("{:#?}\n", env);
-
-    // Stores information about structs, scenes, functions, and identifiers
-    let mut context = parse::context::Context::new();
-
+    
     // Print any parse errors, then exit. Otherwise, return AST
     let mut ast = parse::parse(&input).map_err(|e| 
         exit!(format!("Parse Error: {}", e)) 
     ).unwrap();
-
-    translate::validate(&mut ast, &mut context);
+    
+    // Stores information about structs, scenes, functions, and identifiers
+    let context = translate::validate(&mut ast);
 
     // Write AST to a file
     if env.save_ast {

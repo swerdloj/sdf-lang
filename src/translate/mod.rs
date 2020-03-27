@@ -6,12 +6,14 @@ use crate::parse::context::Context;
 use crate::parse::glsl;
 
 // The parser generates an AST from the bottom up. This is an issue because expressions
-// such as `if` will be parsed *after* the statements *within* the `if.
+// such as `if` will be parsed *after* the statements *within* the `if`.
 // Similarly, statement blocks are parsed after their statements, meaning scope is difficult
-// to account for
+// to account for.
 //
-// Note that nested items are translated recursively (for bottom-up analysis like expressions)
-pub fn validate(ast: &mut AST, context: &mut Context) -> () {
+// Note that nested items are translated recursively (for bottom-up type analysis like expressions)
+pub fn validate(ast: &mut AST) -> Context {
+    let mut context = Context::new();
+
     for item in ast {
         match item {
             Item::Struct { name, fields } => {
@@ -30,7 +32,7 @@ pub fn validate(ast: &mut AST, context: &mut Context) -> () {
                 }
 
                 for statement in statements {
-                    validate_statement(statement, context);
+                    validate_statement(statement, &mut context);
                 }
 
                 context.scopes.pop_scope();
@@ -66,7 +68,7 @@ pub fn validate(ast: &mut AST, context: &mut Context) -> () {
                             }
 
                             for statement in statements {
-                                validate_statement(statement, context);
+                                validate_statement(statement, &mut context);
                             }
 
                             context.scopes.pop_scope();
@@ -81,6 +83,8 @@ pub fn validate(ast: &mut AST, context: &mut Context) -> () {
             }
         }
     }
+
+    context
 }
 
 fn validate_statement(statement: &mut Statement, context: &mut Context) {
@@ -266,6 +270,10 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
 
 fn validate_expression(expression: &mut Expression, context: &mut Context) {
     match expression {
+        Expression::Parenthesized(expr) => {
+            validate_expression(expr.as_mut(), context);
+        }
+
         Expression::FunctionCall(call) => {
             let param_types = call.parameters.iter_mut().map(|expr| {
                 validate_expression(expr, context);
@@ -476,7 +484,7 @@ pub fn translate(ast: &AST, context: &Context) -> String {
             }
 
             Item::Scene { name, statements } => {
-                glsl.push_str(&translate_scene(name, statements));
+                // glsl.push_str(&translate_scene(name, statements));
             }
 
             Item::Implementation { struct_name: _, functions } => {

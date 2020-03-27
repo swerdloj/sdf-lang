@@ -114,7 +114,7 @@ pub struct Context {
 }
 
 impl Context {
-   pub fn new() -> Self {
+    pub fn new() -> Self {
         macro_rules! declare_primitive_types {
             ( $( $x:expr ),+ ) => {{
                     let mut types = HashSet::new();
@@ -127,24 +127,39 @@ impl Context {
         // see http://www.shaderific.com/glsl-types
         let primitive_types = declare_primitive_types!(
             "float", "double", "bool", "int", "uint", "sampler2D", "samplerCube",
-            "vec2", "vec3", "vec4"
+            "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4", "bvec2", "bvec3", "bvec4",
+            "dvec2", "dvec3", "dvec4", "uvec2", "uvec3", "uvec4"
         );
 
+
+
+        // TODO: Allow different defaults based on shader type
+        // TODO: Allow shader-type declaration (like #FRAGMENT or #VERTEX)
+
+
+
+        // Default functions are handled externally (glsl::functions)
         // see http://www.shaderific.com/glsl-functions
         let functions = HashMap::new();
-        
-        // TODO: Insert default functions (need special mechanism for overloading?)
-        // functions.insert("length", FunctionSignature{name: "length", ..}, "float");
 
         // TODO: HashSet does not save insertion order. This is probably not an issue, but look into it.
         let mut uniforms = HashSet::new();
-        uniforms.insert(("time".to_owned(), "int".to_owned()));
-        uniforms.insert(("window_size".to_owned(), "vec2".to_owned()));
+        uniforms.insert(("time".to_owned(), "float".to_owned()));
+        uniforms.insert(("window_dimensions".to_owned(), "vec2".to_owned()));
         uniforms.insert(("mouse_position".to_owned(), "vec2".to_owned()));
 
         // FIXME: This MUST be in out location 0 (must save this order)
         let mut outs = HashSet::new();
-        outs.insert(("out_color".to_owned(), "float".to_owned()));
+        outs.insert(("out_color".to_owned(), "vec4".to_owned()));
+
+
+        // TODO: Most of this should be reserved for scenes? Or make it optional via directive
+
+        let mut scopes = Scope::new();
+        scopes.add_var_to_scope("out_color".to_owned(), "vec4".to_owned());
+        scopes.add_var_to_scope("time".to_owned(), "float".to_owned());
+        scopes.add_var_to_scope("window_dimensions".to_owned(), "vec2".to_owned());
+        scopes.add_var_to_scope("gl_FragCoord".to_owned(), "vec4".to_owned());
 
         Context {
             functions,
@@ -152,7 +167,7 @@ impl Context {
             primitive_types,
             uniforms,
             outs,
-            scopes: Scope::new(),
+            scopes,
         }
     }
 
@@ -176,6 +191,16 @@ impl Context {
 
     pub fn uniforms(&self) -> &HashSet<(String, String)> {
         &self.uniforms
+    }
+
+    /// Fill a given HashMap with uniform information.
+    /// name -> (location, type)
+    pub fn get_uniform_map(&self, map: &mut HashMap<String, (usize, String)>) {
+        let mut location = 0;
+        for (name, ty) in &self.uniforms {
+            map.insert(name.clone(), (location, ty.clone()));
+            location += 1;
+        }
     }
     
     pub fn declare_out(&mut self, name: String, ty: String /*, initial_value: ?? */) {
@@ -275,15 +300,6 @@ impl Context {
 
         constructor
     }
-
-    // pub fn function_type(&self, name: &str) -> String {
-    //     if let Some(function) = self.functions.get(name) {
-    //         function.return_type.clone()
-    //     } else {
-    //         exit!(format!("Error: No such function exists: '{}'", name));
-    //         unreachable!();
-    //     }
-    // }
 
     pub fn declare_function(&mut self, name: String, parameters: Vec<(String, String)>, ty: String) {
         if glsl::functions::is_builtin(&name) {
@@ -473,6 +489,10 @@ impl Context {
 
     pub fn expression_type(&self, expression: &ast::Expression) -> String {
         match expression {
+            ast::Expression::Parenthesized(expr) => {
+                self.expression_type(expr.as_ref())
+            }
+
             ast::Expression::Literal(literal) => {
                 match literal {
                     ast::Literal::Bool(_) => {

@@ -73,7 +73,7 @@ pub fn castable(from: &str, to: &str) -> bool {
 
         "uint" => {
             match from {
-                "int" => true,
+                // "int" => true,
                 _ => false,
             }
         }

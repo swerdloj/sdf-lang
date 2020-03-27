@@ -1,6 +1,8 @@
 extern crate sdf_lang;
+use sdf_lang::runtime::application::Application;
 
 fn main() {
-    let mut app = sdf_lang::runtime::application::Application::new((4, 5));
+    let mut app = Application::new((4, 5),
+        "./tests/fragment.sdf");
     app.run();
 }

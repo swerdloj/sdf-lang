@@ -215,10 +215,21 @@ pub fn translate_expression(expr: &Expression) -> String {
     let mut glsl = String::new();
     
     match expr {
+        Expression::Parenthesized(pexpr) => {
+            glsl.push('(');
+            glsl.push_str(&translate_expression(pexpr.as_ref()));
+            glsl.push(')');
+        }
+
         Expression::Literal(literal) => {
             match literal {
                 Literal::Float(f) => {
-                    glsl.push_str(&f.to_string());
+                    // Rust prints "#.0f32" as "#" which is an int in glsl
+                    let mut float = f.to_string();
+                    if !float.contains(".") {
+                        float.push('.');
+                    }
+                    glsl.push_str(&float);
                 }
                 Literal::Double(d) => {
                     glsl.push_str(&d.to_string());

@@ -380,7 +380,7 @@ IdentOrFunction: ast::IdentOrFunction = {
 // TODO: Keep parenthesis around expressions when translating
 // First precedence - right associativity (for unary ops)
 BaseExpr: ast::Expression = {
-    "(" <Expression> ")" => <>,
+    "(" <expr:Expression> ")" => ast::Expression::Parenthesized(Box::new(expr)),
 
     Literal => ast::Expression::Literal(<>),
 
@@ -454,9 +454,11 @@ Ident: String = {
     <VEC_IDENTIFIER> => <>.to_owned(),
 
     <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => {
-        if <>.len() >= 3 && <>[0..=2].to_owned() == "gl_".to_owned() {
-            exit!(format!("Error: The identifier prefix 'gl_' is reserved (used in '{}')", <>));
-        } 
+
+        // TODO: Move this check to let statements
+        // if <>.len() >= 3 && <>[0..=2].to_owned() == "gl_".to_owned() {
+        //     exit!(format!("Error: The identifier prefix 'gl_' is reserved (used in '{}')", <>));
+        // } 
         
         // TODO: Reserve "__ident__..." for code generation
 
@@ -472,7 +474,8 @@ Tag: ast::Tag = {
 }
 
 Literal: ast::Literal = {
-    <uint:r"[0-9]+"> => ast::Literal::UInt(uint.parse::<u32>().unwrap()),
+    // GLSL defaults values to "int" rather than "uint"
+    <int:r"[0-9]+"> => ast::Literal::Int(int.parse::<i32>().unwrap()),
     <float:r"[0-9]+[.][0-9]*"> => ast::Literal::Float(float.parse::<f32>().unwrap()),
     <boolean:BOOL> => ast::Literal::Bool(boolean.parse::<bool>().unwrap()),
 }

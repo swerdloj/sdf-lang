@@ -13,14 +13,14 @@ struct SomeStruct {
 
 // Struct implementations have a "self" reference
 impl SomeStruct {
-    fn some_function(self, input: float) -> float {
+    fn some_function(self, some_input: float) -> float {
         let var: double = 1 - 1.2 as int * 3;
         
         // Member vec access and assignemnt
         self.vec_field.x = 2;
         self.vec_field.xy *= 2;
 
-        return self.field1 * input;
+        return self.field1 * some_input;
     }
 
     fn member_stuff(self) {
@@ -47,6 +47,8 @@ fn vectors() {
 
     // Extension
     let z = ivec2(1); // == ivec2(1, 1)
+
+    let v: uvec4;
 
     let a = x;
     a += 3;
@@ -146,7 +148,8 @@ fn function(param1: float, param2: int) -> bool {
     let var = true;
     let z = 7.33;
 
-    z += z + 2 - -int_function();
+    z = 12;
+    z += z + 21 - -int_function();
     z *= 123;
 
     let inferred_from_variable = z + 5;
@@ -208,6 +211,11 @@ fn if_expressions() {
     // Conditions must be boolean types
     // if 1 + 2 {}
     if bool_function() {}
+}
+
+fn main() {
+    // "out_color" is the output color for the fragment
+    out_color = vec4(0.5, 0.5, 0.7, 1.);
 }
 
 // Scenes will allow for SDF interactions (point manipulation, etc.)
