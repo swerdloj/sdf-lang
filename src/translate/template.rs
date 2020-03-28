@@ -1,5 +1,4 @@
 use crate::parse::ast::*;
-use crate::exit;
 
 use std::collections::HashSet;
 
@@ -50,11 +49,18 @@ pub fn translate_structure(name: &str, fields: &Vec<(String, String, Option<Expr
     glsl
 }
 
-pub fn translate_function(name: &str, parameters: &Vec<(String, String)>, return_type: &str, statements: &Vec<Statement>) -> String {
+pub fn translate_function(name: &str, parameters: &Vec<(Option<FuncParamQualifier>, String, String)>, return_type: &str, statements: &Vec<Statement>) -> String {
     let mut glsl = String::new();
 
     let mut param_string = String::new();
-    for (param_name, param_type) in parameters {
+    for (qualifier, param_name, param_type) in parameters {
+        if let Some(qual) = qualifier {
+            match qual {
+                FuncParamQualifier::In => param_string.push_str("in "),
+                FuncParamQualifier::Out => param_string.push_str("out "),
+                FuncParamQualifier::InOut => param_string.push_str("inout "),
+            }
+        }
         param_string.push_str(&format!("{} {}, ", param_type, param_name));
     }
 
@@ -143,7 +149,8 @@ pub fn translate_statement(statement: &Statement) -> String {
         // TODO: Tagged variables should not be re-included here (handled elsewhere for global scope)
         Statement::Let { ident, ty, expression: expr, .. } => {           
             if ty.is_none() {
-                exit!(format!("Error: The type of '{}' could not be determined. Consider annotating the type.", ident));
+                // TODO: This error will eventually serve no purpose (after validation, all types are defined)
+                panic!(format!("Error: The type of '{}' could not be determined. Consider annotating the type.", ident));
             }
 
             glsl.push_str(&format!("{} {}", &ty.as_ref().unwrap(), ident));

@@ -77,11 +77,12 @@ Function: ast::Item = {
 }
 
 #[inline]
-FunctionParams: Vec<(String, String)> = {
+FunctionParams: Vec<(Option<ast::FuncParamQualifier>, String, String)> = {
     "(" <self_single:(Ident)?>
         <self_comma:(<Ident> ",")?>
-        <multi:(<Ident> ":" <Ident> ",")*> 
-        <single:(<Ident> ":" <Ident>)?> ")" 
+        <multi:(<ParamQualifier?> <Ident> ":" <Ident> ",")*> 
+        <single:(<ParamQualifier?> <Ident> ":" <Ident>)?>
+    ")" 
     => {
         let mut params = Vec::new();
         
@@ -90,12 +91,12 @@ FunctionParams: Vec<(String, String)> = {
             if s != "self" {
                 exit!("Error: TODO: not 'self'");
             }
-            params.push(("self".to_owned(), "self".to_owned())); 
+            params.push( (Some(ast::FuncParamQualifier::InOut), "self".to_owned(), "self".to_owned()) ); 
         } else if let Some(sc) = self_comma {
             if sc != "self" {
                 exit!("Error: TODO: not 'self'");
             }
-            params.push(("self".to_owned(), "self".to_owned())); 
+            params.push( (Some(ast::FuncParamQualifier::InOut), "self".to_owned(), "self".to_owned()) ); 
         }
 
         params.extend_from_slice(&multi[0..]);
@@ -106,6 +107,13 @@ FunctionParams: Vec<(String, String)> = {
 
         params
     },
+}
+
+#[inline]
+ParamQualifier: ast::FuncParamQualifier = {
+    "in" => ast::FuncParamQualifier::In,
+    "out" => ast::FuncParamQualifier::Out,
+    "inout" => ast::FuncParamQualifier::InOut,
 }
 
 // ---------------- STRUCT ----------------
@@ -377,7 +385,6 @@ IdentOrFunction: ast::IdentOrFunction = {
     FunctionCall => ast::IdentOrFunction::Function(<>),
 }
 
-// TODO: Keep parenthesis around expressions when translating
 // First precedence - right associativity (for unary ops)
 BaseExpr: ast::Expression = {
     "(" <expr:Expression> ")" => ast::Expression::Parenthesized(Box::new(expr)),
@@ -411,7 +418,6 @@ BaseExpr: ast::Expression = {
 
 #[inline]
 CastOp: ast::BinaryOperator = {
-    // "." => ast::BinaryOperator::Member,
     "as" => ast::BinaryOperator::Cast,
 }
 

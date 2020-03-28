@@ -1,6 +1,5 @@
 pub mod template;
 
-use crate::exit;
 use crate::parse::ast::*;
 use crate::parse::context::Context;
 use crate::parse::glsl;
@@ -11,28 +10,28 @@ use crate::parse::glsl;
 // to account for.
 //
 // Note that nested items are translated recursively (for bottom-up type analysis like expressions)
-pub fn validate(ast: &mut AST) -> Context {
+pub fn validate(ast: &mut AST) -> Result<Context, String> {
     let mut context = Context::new();
 
     for item in ast {
         match item {
             Item::Struct { name, fields } => {
-                context.declare_struct(name.clone(), fields.clone());
+                context.declare_struct(name.clone(), fields.clone())?;
             }
 
             // TODO: Ensure that return statement has same type as function
             // TODO: Ensure that typed functions *have* a return statement
             Item::Function { name, parameters, return_type, statements } => {               
-                context.declare_function(name.clone(), parameters.clone(), return_type.clone());
+                context.declare_function(name.clone(), parameters.clone(), return_type.clone())?;
 
                 context.scopes.push_scope("function");
 
-                for (param_name, param_type) in parameters {
-                    context.add_var_to_scope(param_name.clone(), param_type.clone());
+                for (_param_qual, param_name, param_type) in parameters {
+                    context.add_var_to_scope(param_name.clone(), param_type.clone())?;
                 }
 
                 for statement in statements {
-                    validate_statement(statement, &mut context);
+                    validate_statement(statement, &mut context)?;
                 }
 
                 context.scopes.pop_scope();
@@ -40,35 +39,35 @@ pub fn validate(ast: &mut AST) -> Context {
 
             // TODO: 'self' parameter should be marked as 'inout'
             Item::Implementation { struct_name, functions  } => {
-                context.validate_type(struct_name);
-                context.declare_implementation(struct_name);
+                context.validate_type(struct_name)?;
+                context.declare_implementation(struct_name)?;
 
                 if functions.len() == 0 {
-                    exit!(format!("Error: To implement '{}', at least one function is needed", struct_name));
+                    return Err(format!("To implement '{}', at least one function is needed", struct_name));
                 }
 
                 for function in functions {
                     match function {
                         Item::Function { name, parameters, return_type, statements } => {
                             if parameters.len() > 0 {
-                                parameters[0] = ("self".to_owned(), format!("{}", struct_name));
+                                parameters[0] = (Some(FuncParamQualifier::InOut), "self".to_owned(), format!("{}", struct_name));
                             } else {
-                                exit!(format!("Error: Implementation function '{}.{}' must reference 'self'", struct_name, name));
+                                return Err(format!("Implementation function '{}.{}' must reference 'self'", struct_name, name));
                             }
 
                             // Memeber functions are represented like so in GLSL
                             *name = format!("__{}__{}", struct_name, name);
                             
-                            context.declare_function(name.to_owned(), parameters.clone(), return_type.clone());
+                            context.declare_function(name.to_owned(), parameters.clone(), return_type.clone())?;
                             
                             context.scopes.push_scope("impl");
 
-                            for (param_name, param_type) in parameters {
-                                context.add_var_to_scope(param_name.clone(), param_type.clone());
+                            for (_qual, param_name, param_type) in parameters {
+                                context.add_var_to_scope(param_name.clone(), param_type.clone())?;
                             }
 
                             for statement in statements {
-                                validate_statement(statement, &mut context);
+                                validate_statement(statement, &mut context)?;
                             }
 
                             context.scopes.pop_scope();
@@ -84,32 +83,53 @@ pub fn validate(ast: &mut AST) -> Context {
         }
     }
 
-    context
+    Ok(context)
 }
 
-fn validate_statement(statement: &mut Statement, context: &mut Context) {
+fn validate_statement(statement: &mut Statement, context: &mut Context) -> Result<(), String> {
     match statement {
         Statement::Continue | Statement::Break => {
             if !context.scopes.is_within_loop() {
-                exit!(format!("Error: 'continue' and 'break' are only valid within a loop (found in a {})", context.scopes.current_kind()));
+                return Err(format!("'continue' and 'break' are only valid within a loop (found in a {})", context.scopes.current_kind()));
             }
         }
 
         Statement::Let { ident, tag, ty, expression } => {
+            if ident.starts_with("gl_") {
+                return Err(format!("The prefix 'gl_' is reserved (used in '{}')", ident));
+            }
+            
             if let Some(assignment) = expression {
-                validate_expression(assignment, context);
+                validate_expression(assignment, context)?;
+
+                // Special cases
+                if let Expression::Literal(lit) = assignment {
+                    if let Literal::Int(i) = lit {
+                        if let Some(t) = ty {
+                            if t == "uint" {
+                                *lit = Literal::UInt(*i as u32);
+                            }
+                        }
+                    }
+                } else if context.expression_type(assignment)? == "uint" {
+                    if let Some(t) = ty {
+                        if t == "int" {
+                            return Err(format!("Cannot assign 'int' to 'uint' expression"));
+                        }
+                    }
+                }
             }
             
             // Tagged variables must have specified type and initial value
             if let Some(t) = tag {
                 if expression.is_none() {
-                    exit!(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but not initialized", ident, t));
+                    return Err(format!("Variable '{}' was tagged as '{:?}', but not initialized", ident, t));
                 }
 
                 if let Some(specified_type) = ty {   
                     match t {
                         Tag::Uniform => {
-                            context.declare_uniform(ident.clone(), specified_type.clone())
+                            context.declare_uniform(ident.clone(), specified_type.clone())?
                         }
 
                         _ => {
@@ -117,17 +137,17 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                         }
                     }
                 } else {
-                    exit!(format!("Semantic Error: Variable '{}' was tagged as '{:?}', but its type was not specified", ident, t));
+                    return Err(format!("Variable '{}' was tagged as '{:?}', but its type was not specified", ident, t));
                 }
             }
 
             let checked_type = if let Some(specified_type) = ty {
-                context.validate_type(specified_type);
+                context.validate_type(specified_type)?;
                 // Check whether type assigned is compatible with user-specified
                 if let Some(assignment) = expression {                    
-                    let assigned_type = context.expression_type(assignment);
-                    if !glsl::castable(&assigned_type, &specified_type) {
-                        exit!(format!("Error: Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
+                    let assigned_type = context.expression_type(assignment)?;
+                    if !glsl::castable(&assigned_type, &specified_type)? {
+                        return Err(format!("Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
                                                    &ident, &specified_type, &assigned_type));
                     }
                 }
@@ -135,11 +155,11 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             } else {
                 // Make sure inferred type is valid (not void like a void function call)
                 if let Some(assignment) = &expression {
-                    let expr_type = context.expression_type(&assignment);
+                    let expr_type = context.expression_type(&assignment)?;
                     if expr_type != "void" {
                         Some(expr_type)
                     } else {
-                        exit!(format!("Error: Variable '{}' was assigned type 'void'.", &ident));
+                        return Err(format!("Variable '{}' was assigned type 'void'.", &ident));
                     }
                 } else {
                     None
@@ -148,18 +168,18 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
 
             *ty = checked_type.clone();
 
-            context.add_var_to_scope(ident.clone(), checked_type.unwrap());
+            context.add_var_to_scope(ident.clone(), checked_type.unwrap())?;
         }
 
         Statement::LetConstructor { ident, constructor } => {
-            context.add_var_to_scope(ident.clone(), constructor.ty.clone());
+            context.add_var_to_scope(ident.clone(), constructor.ty.clone())?;
             
             for (_ident, field) in &mut constructor.fields {
-                validate_expression(field, context);
+                validate_expression(field, context)?;
             }
             
             // Order the fields and fill in defaults
-            constructor.fields = context.generate_constructor(&constructor.ty, constructor.fields.clone());
+            constructor.fields = context.generate_constructor(&constructor.ty, constructor.fields.clone())?;
         }
 
         // The 'op' should not influence anything here
@@ -168,7 +188,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
 
             match lhs {
                 IdentOrMember::Ident(ident) => {
-                    lhs_type = context.scopes.var_type(ident);
+                    lhs_type = context.scopes.var_type(ident)?;
                 }
                 
                 // lhs must be a series of identifiers and fields. No functions.
@@ -178,21 +198,21 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                             IdentOrFunction::Ident(ident) => {
                                 // First item is a variable. The rest are fields.
                                 if lhs_type == "temp" {
-                                    lhs_type = context.scopes.var_type(ident);
+                                    lhs_type = context.scopes.var_type(ident)?;
                                 } else {
                                     // Check if lhs is the field of a vec
                                     if glsl::vec::is_vec_constructor_or_type(&lhs_type) {
                                         // Ensure that swizzle is op-assignment valid (can be more than length 1)
-                                        lhs_type = glsl::vec::validate_swizzle_for_assignment(&lhs_type, ident);
+                                        lhs_type = glsl::vec::validate_swizzle_for_assignment(&lhs_type, ident)?;
                                     } else {   
-                                        lhs_type = context.struct_field_type(&lhs_type, ident);
+                                        lhs_type = context.struct_field_type(&lhs_type, ident)?;
                                     }
                                 }
                             }
 
                             // TODO: Is this always true? Or are there cases where this would be valid?
                             IdentOrFunction::Function(func) => {
-                                exit!(format!("Error: Cannot assign to '.' operator with function call '{}'", func.name));
+                                return Err(format!("Cannot assign to '.' operator with function call '{}'", func.name));
                             }
                         }
                     }
@@ -200,8 +220,8 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             }
 
             // rhs
-            validate_expression(expression, context);
-            let expr_type = context.expression_type(expression);
+            validate_expression(expression, context)?;
+            let expr_type = context.expression_type(expression)?;
 
             let result_type = match op {
                 AssignmentOperator::Assign => {
@@ -211,19 +231,18 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
                 _ => {                    
                     // The result of (lhs op rhs) should be castable to the type of (lhs)
                     // This is useful for types like 'vec' where (lhs op rhs) is not always obvious
-                    context.add_type(&lhs_type, &expr_type)
-                    
+                    context.add_type(&lhs_type, &expr_type)?
                 }
             };
 
-            if !glsl::castable(&result_type, &lhs_type) {
-                exit!(format!("Error: Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &result_type));
+            if !glsl::castable(&result_type, &lhs_type)? {
+                return Err(format!("Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &result_type));
             }
         }
 
         Statement::Return { expression } => {
             if let Some(expr) = expression {
-                validate_expression(expr, context);
+                validate_expression(expr, context)?;
             }
         }
 
@@ -232,69 +251,72 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) {
             
             context.scopes.push_scope("loop");
             
-            let from_type = context.expression_type(from);
-            let to_type = context.expression_type(to);
+            let from_type = context.expression_type(from)?;
+            let to_type = context.expression_type(to)?;
 
             if (from_type == "int" || from_type == "uint") && (to_type == "int" || to_type == "uint") {
-                context.add_var_to_scope(loop_var.clone(), "int".to_owned());
+                context.add_var_to_scope(loop_var.clone(), "int".to_owned())?;
             } else {
-                exit!("Error: For loops only support integers for now");
+                return Err("For loops only support integers for now".to_owned());
             }
 
             for statement in block {
-                validate_statement(statement, context);
+                validate_statement(statement, context)?;
             }
 
             context.scopes.pop_scope();
         }
 
         Statement::While { condition, block } => {
-            if context.expression_type(condition) != "bool" {
-                exit!("Error: While loop condition must be boolean.");
+            if context.expression_type(condition)? != "bool" {
+                return Err("While loop condition must be boolean.".to_owned());
             }
 
             context.scopes.push_scope("loop");
 
             for statement in block {
-                validate_statement(statement, context);
+                validate_statement(statement, context)?;
             }
 
             context.scopes.pop_scope();
         }
 
         Statement::Expression(expr) => {
-            validate_expression(expr, context);
+            validate_expression(expr, context)?;
         }
     }
+
+    Ok(())
 }
 
-fn validate_expression(expression: &mut Expression, context: &mut Context) {
+fn validate_expression(expression: &mut Expression, context: &mut Context) -> Result<(), String> {
     match expression {
         Expression::Parenthesized(expr) => {
-            validate_expression(expr.as_mut(), context);
+            validate_expression(expr.as_mut(), context)?;
         }
 
         Expression::FunctionCall(call) => {
-            let param_types = call.parameters.iter_mut().map(|expr| {
-                validate_expression(expr, context);
-                context.expression_type(expr)
-            }).collect();
+            let mut param_types = Vec::new();
+            for expr in call.parameters.iter_mut() {
+                validate_expression(expr, context)?;
+                param_types.push(context.expression_type(expr)?);
+            }
             
-            let return_type = context.check_function_call(&call.name, param_types);
+            let return_type = context.check_function_call(&call.name, param_types)?;
 
             call.ty = return_type;
         }
 
         Expression::Unary { operator, rhs, ty } => {
-            validate_expression(rhs, context);
+            validate_expression(rhs, context)?;
 
             match operator {
                 UnaryOperator::Negate => {
-                    *ty = context.negate_type(&context.expression_type(rhs));
+                    *ty = context.negate_type(&context.expression_type(rhs)?)?;
                 }
                 UnaryOperator::Not => {
-                    if context.expression_type(rhs) != "bool" {
-                        exit!(format!("The binary not cannot be used on type '{}'", &ty));
+                    if context.expression_type(rhs)? != "bool" {
+                        return Err(format!("The binary not cannot be used on type '{}'", &ty));
                     }
                     *ty = "bool".to_owned();
                 }
@@ -316,16 +338,16 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                     IdentOrFunction::Ident(ident) => {
                         if current_type == "temp" {
                             // First item must be a variable. Following would be fields.
-                            current_type = context.scopes.var_type(ident);
+                            current_type = context.scopes.var_type(ident)?;
                         } else {
                             // If vec type, follow swizzle rules
                             if glsl::vec::is_vec_constructor_or_type(&current_type) {
                                 // Get the type of the swizzle
-                                current_type = glsl::vec::validate_swizzle(&current_type, &ident);
+                                current_type = glsl::vec::validate_swizzle(&current_type, &ident)?;
                             } 
                             // Otherwise, it is just a normal field
                             else {
-                                current_type = context.struct_field_type(&current_type, ident);
+                                current_type = context.struct_field_type(&current_type, ident)?;
                             }
                         }
                         last_ident = ident.clone();
@@ -334,7 +356,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                     // Note that function calls cannot happen before identifiers
                     IdentOrFunction::Function(func) => {
                         if current_type == "temp" {
-                            exit!(format!("Error: Member methods must be accessed via the '.' operator: '{}'", func.name));
+                            return Err(format!("Member methods must be accessed via the '.' operator: '{}'", func.name));
                         }
                         func.name = format!("__{}__{}", current_type, func.name);
 
@@ -343,12 +365,13 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
                         // ident was moved into the function call
                         to_remove.push(index - 1);
 
-                        let param_types = func.parameters.iter_mut().map(|expr| {
-                            validate_expression(expr, context);
-                            context.expression_type(expr)
-                        }).collect();
+                        let mut param_types = Vec::new();
+                        for expr in func.parameters.iter_mut() {
+                            validate_expression(expr, context)?;
+                            param_types.push(context.expression_type(expr)?);
+                        }
 
-                        current_type = context.check_function_call(&func.name, param_types);
+                        current_type = context.check_function_call(&func.name, param_types)?;
                         func.ty = current_type.clone();
                     }
                 }
@@ -360,8 +383,8 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
         }
 
         Expression::Binary { lhs, operator, rhs, ty } => {            
-            validate_expression(lhs, context);
-            validate_expression(rhs, context);
+            validate_expression(lhs, context)?;
+            validate_expression(rhs, context)?;
 
             match operator {
                 // TODO: Some operators like "&&" require lhs and rhs to both be boolean
@@ -371,42 +394,42 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
 
                 BinaryOperator::Multiply | BinaryOperator::Divide => {
                     let actual_type = context.multiply_type(
-                        &context.expression_type(lhs),
-                        &context.expression_type(rhs)
-                    );
+                        &context.expression_type(lhs)?,
+                        &context.expression_type(rhs)?
+                    )?;
 
                     *ty = actual_type;
                 }
 
                 BinaryOperator::Plus | BinaryOperator::Minus => {
                     let actual_type = context.add_type(
-                        &context.expression_type(lhs),
-                        &context.expression_type(rhs)
-                    );
+                        &context.expression_type(lhs)?,
+                        &context.expression_type(rhs)?
+                    )?;
 
                     *ty = actual_type;
                 }
 
                 BinaryOperator::Cast => {
-                    let lhs_type = context.expression_type(&lhs);
+                    let lhs_type = context.expression_type(&lhs)?;
                     // let rhs_type = context.expression_type(&rhs);
 
                     match rhs.as_ref() {
                         Expression::Identifier(type_name) => {
                             if context.is_primitive(&type_name) {
                                 // TODO: Is this correct? Always required for narrowing conversions anyway
-                                if glsl::narrow_castable(&lhs_type, &type_name) {
+                                if glsl::narrow_castable(&lhs_type, &type_name)? {
                                 // if true {
                                     *ty = type_name.to_owned();
                                 } else {
-                                    exit!(format!("Error: Cannot cast from type '{}' to '{}'", &lhs_type, &type_name));
+                                    return Err(format!("Cannot cast from type '{}' to '{}'", &lhs_type, &type_name));
                                 }
                             } else {
-                                exit!(format!("Error: Cannot cast to non-primitive type, '{}'", &type_name));
+                                return Err(format!("Cannot cast to non-primitive type, '{}'", &type_name));
                             }
                         }
 
-                        _ => exit!("Can only cast to type name, not an expression"),                    }
+                        _ => return Err("Can only cast to type name, not an expression".to_owned()),                    }
                 }
             }
         }
@@ -414,30 +437,30 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
         // TODO: `If` is currently only treated as a statement. 
         //       Implement typing and translation for expression usage.
         Expression::If { expression, if_block, else_block, else_if_block, ty } => {
-            validate_expression(expression, context);
+            validate_expression(expression, context)?;
 
             context.scopes.push_scope("if");
             for statement in if_block {
-                validate_statement(statement, context);
+                validate_statement(statement, context)?;
             }
             context.scopes.pop_scope();
             
             if let Some(block_statements) = else_block {
                 context.scopes.push_scope("if");
                 for statement in block_statements {
-                    validate_statement(statement, context);
+                    validate_statement(statement, context)?;
                 }
                 context.scopes.pop_scope();
             }
 
             if let Some(else_if_expr) = else_if_block {
-                validate_expression(else_if_expr, context);
+                validate_expression(else_if_expr, context)?;
             }
 
             // Condition must be type "bool"
-            let expr_type = context.expression_type(expression);
+            let expr_type = context.expression_type(expression)?;
             if expr_type != "bool" {
-                exit!(format!("Error: 'If' condition must be of type 'bool', but got '{}'", expr_type));
+                return Err(format!("'If' condition must be of type 'bool', but got '{}'", expr_type));
             }
 
             // TODO: Expression type check and assignment
@@ -449,10 +472,12 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) {
 
         Expression::Identifier(ident) => {
             if !context.is_primitive(ident) && !context.scopes.is_var_in_scope(ident) {
-                exit!(format!("Error: Identifier '{}' not found in scope", ident));
+                return Err(format!("Identifier '{}' not found in scope", ident));
             }
         }
     }
+
+    Ok(())
 }
 
 pub fn translate(ast: &AST, context: &Context) -> String {

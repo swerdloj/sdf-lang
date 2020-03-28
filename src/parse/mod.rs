@@ -52,6 +52,8 @@ fn vec_to_string(vec: Vec<String>) -> String {
     string
 }
 
+// TODO: Implement a test function that compiles a series of test files
+
 /// Simple parser test cases. Note that only full ASTs are generated
 /// 
 /// This is is to prevent lalrpop from generating more code than needed
@@ -64,11 +66,5 @@ mod parser_test {
         let ast = super::parse(input);
 
         println!("{:#?}", ast.unwrap());
-    }
-    
-    #[test]
-    fn expression_integration() {
-        // FIXME: The new pipeline requires the generated AST to typed via `translate`
-        //test_input("");
     }
 }

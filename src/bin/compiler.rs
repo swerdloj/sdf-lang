@@ -1,7 +1,7 @@
 extern crate sdf_lang;
 
 use sdf_lang::{
-    parse, environment, translate, exit,
+    parse, environment, translate, exit
 };
 
 fn main() -> Result<(), std::io::Error> {
@@ -17,7 +17,9 @@ fn main() -> Result<(), std::io::Error> {
     ).unwrap();
     
     // Stores information about structs, scenes, functions, and identifiers
-    let context = translate::validate(&mut ast);
+    let context = translate::validate(&mut ast).map_err(|e| 
+        exit!(format!("Semantic Error: {}", e)) 
+    ).unwrap();
 
     // Write AST to a file
     if env.save_ast {

@@ -1,4 +1,3 @@
-use crate::exit;
 use crate::parse::ast;
 use super::glsl::castable;
 use super::glsl;
@@ -66,10 +65,11 @@ impl Scope {
         self.current -= 1;
     }
 
-    fn add_var_to_scope(&mut self, name: String, ty: String) {
-        // println!("Adding '{}' to nested scope {}", &name, self.current);
+    fn add_var_to_scope(&mut self, name: String, ty: String) -> Result<(), String> {
         if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), ty) {
-            exit!(format!("Error: Variable '{}' already exists in the current scope", name));
+            Err(format!("Error: Variable '{}' already exists in the current scope", name))
+        } else {   
+            Ok(())
         }
     }
 
@@ -83,14 +83,14 @@ impl Scope {
         false
     }
 
-    pub fn var_type(&self, name: &str) -> String {
+    pub fn var_type(&self, name: &str) -> Result<String, String> {
         for scope in 0..=self.current {
             if let Some(ty) = self.scopes.get(&scope).unwrap().get(name) {
-                return ty.to_owned();
+                return Ok(ty.to_owned());
             }
         }
 
-        exit!(format!("Unknown identifier '{}'", name));
+        Err(format!("Unknown identifier '{}'", name))
     }
 }
 
@@ -156,10 +156,10 @@ impl Context {
         // TODO: Most of this should be reserved for scenes? Or make it optional via directive
 
         let mut scopes = Scope::new();
-        scopes.add_var_to_scope("out_color".to_owned(), "vec4".to_owned());
-        scopes.add_var_to_scope("time".to_owned(), "float".to_owned());
-        scopes.add_var_to_scope("window_dimensions".to_owned(), "vec2".to_owned());
-        scopes.add_var_to_scope("gl_FragCoord".to_owned(), "vec4".to_owned());
+        scopes.add_var_to_scope("out_color".to_owned(), "vec4".to_owned()).unwrap();
+        scopes.add_var_to_scope("time".to_owned(), "float".to_owned()).unwrap();
+        scopes.add_var_to_scope("window_dimensions".to_owned(), "vec2".to_owned()).unwrap();
+        scopes.add_var_to_scope("gl_FragCoord".to_owned(), "vec4".to_owned()).unwrap();
 
         Context {
             functions,
@@ -171,21 +171,25 @@ impl Context {
         }
     }
 
-    pub fn add_var_to_scope(&mut self, name: String, ty: String) {
+    pub fn add_var_to_scope(&mut self, name: String, ty: String) -> Result<(), String> {
         if self.is_primitive(&name) {
-            exit!(format!("Error: Cannot name variable as primitive type '{}'", name));
+            return Err(format!("Error: Cannot name variable as primitive type '{}'", name));
         }
 
-        self.scopes.add_var_to_scope(name, ty);
+        self.scopes.add_var_to_scope(name, ty)?;
+
+        Ok(())
     }
 
     pub fn is_primitive(&self, type_name: &str) -> bool {
         self.primitive_types.contains(type_name)
     }
 
-    pub fn declare_uniform(&mut self, name: String, ty: String /*, initial_value: ?? */) {
+    pub fn declare_uniform(&mut self, name: String, ty: String /*, initial_value: ?? */) -> Result<(), String> {
         if !self.uniforms.insert((name.clone(), ty)) {
-            exit!(format!("Error: Uniform '{}' was already declared", &name));
+            Err(format!("Error: Uniform '{}' was already declared", &name))
+        } else {
+            Ok(())
         }
     }
 
@@ -203,9 +207,11 @@ impl Context {
         }
     }
     
-    pub fn declare_out(&mut self, name: String, ty: String /*, initial_value: ?? */) {
+    pub fn declare_out(&mut self, name: String, ty: String /*, initial_value: ?? */) -> Result<(), String> {
         if !self.outs.insert((name.clone(), ty)) {
-            exit!(format!("Error: Out '{}' was already declared", &name));
+            Err(format!("Error: Out '{}' was already declared", &name))
+        } else {
+            Ok(())
         }
     }
     
@@ -213,51 +219,58 @@ impl Context {
         &self.outs
     }
 
-    pub fn declare_struct(&mut self, name: String, fields: Vec<(String, String, Option<ast::Expression>)>) {       
+    pub fn declare_struct(&mut self, name: String, passed_fields: Vec<(String, String, Option<ast::Expression>)>) -> Result<(), String> {       
         if self.is_primitive(&name) {
-            exit!(format!("Error: Cannot name struct '{}' the same as a primitive type", &name));
+            return Err(format!("Error: Cannot name struct '{}' the same as a primitive type", &name));
+        }
+
+        let mut fields = Vec::new();
+        for (field, ty, default) in passed_fields {
+            fields.push( (field.clone(), self.validate_type(&ty)?, default.clone()) );
         }
         
         let signature = StructSignature {
             name: name.clone(),
-            fields: fields.iter().map(|(field, ty, default)|
-                        ( field.clone(), self.validate_type(ty), default.clone() )
-                    ).collect(),
+            fields,
             has_implementation: false,
         };
 
         if let Some(old) = self.structs.insert(name, signature) {
-            exit!(format!("Error: Struct '{}' was declared multiple times", old.name));
+            Err(format!("Error: Struct '{}' was declared multiple times", old.name))
+        } else {
+            Ok(())
         }
     }
 
-    pub fn declare_implementation(&mut self, struct_name: &str) {
+    pub fn declare_implementation(&mut self, struct_name: &str) -> Result<(), String> {
         if let Some(signature) = self.structs.get_mut(struct_name) {
             if !signature.has_implementation {
                 signature.has_implementation = true;
             } else {
-                exit!(format!("Error: Struct '{}' already has an implementation.", struct_name));
+                return Err(format!("Error: Struct '{}' already has an implementation.", struct_name));
             }
         } else {
-            exit!(format!("Error: No such struct exists, '{}'", struct_name));
+            return Err(format!("Error: No such struct exists, '{}'", struct_name));
         }
+
+        Ok(())
     }
 
-    pub fn struct_field_type(&self, struct_name: &str, field_name: &str) -> String {
+    pub fn struct_field_type(&self, struct_name: &str, field_name: &str) -> Result<String, String> {
         if let Some(signature) = self.structs.get(struct_name) {
             for (name, ty, _default) in &signature.fields {
                 if name == field_name {
-                    return ty.to_owned();
+                    return Ok(ty.to_owned());
                 }
             }
-            exit!(format!("Error: Struct '{}' does not have field '{}'", struct_name, field_name));
+            Err(format!("Error: Struct '{}' does not have field '{}'", struct_name, field_name))
         } else {
-            exit!(format!("Error: Type '{}' is not a struct or does not exist (tried accessing field '{}')", struct_name, field_name));
+            Err(format!("Error: Type '{}' is not a struct or does not exist (tried accessing field '{}')", struct_name, field_name))
         }
     }
 
     /// Order constructor arguments and place defaults where needed
-    pub fn generate_constructor(&self, ty: &str, fields: Vec<(String, ast::Expression)>) -> Vec<(String, ast::Expression)> {
+    pub fn generate_constructor(&self, ty: &str, fields: Vec<(String, ast::Expression)>) -> Result<Vec<(String, ast::Expression)>, String> {
         // Existance is already guarenteed, so can just unwrap()
         let signature = self.structs.get(ty).unwrap();
         
@@ -276,15 +289,15 @@ impl Context {
 
         for field_name in supplied.keys() {
             if !all_fields.contains(field_name) {
-                exit!(format!("Error: The struct '{}' has no field '{}'.", ty, field_name));
+                return Err(format!("Error: The struct '{}' has no field '{}'.", ty, field_name));
             }
         }
 
         for (field_name, field_type, default) in &signature.fields {
             if let Some(user_supplied) = supplied.get(field_name) {
                 // Ensure types are compatible
-                if !castable(&self.expression_type(user_supplied), field_type) {
-                    exit!(format!("Error: The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(user_supplied)));
+                if !castable(&self.expression_type(user_supplied)?, field_type)? {
+                    return Err(format!("Error: The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(user_supplied)?));
                 }
 
                 constructor.push((field_name.clone(), user_supplied.clone()));
@@ -293,39 +306,44 @@ impl Context {
                 if let Some(def) = default {
                     constructor.push((field_name.clone(), def.clone()));
                 } else {
-                    exit!(format!("Error: The constructor for '{}' has no default for field '{}', but no value was supplied.", ty, field_name.clone()));
+                    return Err(format!("Error: The constructor for '{}' has no default for field '{}', but no value was supplied.", ty, field_name.clone()));
                 }
             }
         }
 
-        constructor
+        Ok(constructor)
     }
 
-    pub fn declare_function(&mut self, name: String, parameters: Vec<(String, String)>, ty: String) {
+    pub fn declare_function(&mut self, name: String, declared_parameters: Vec<(Option<ast::FuncParamQualifier>, String, String)>, ty: String) -> Result<(), String> {
         if glsl::functions::is_builtin(&name) {
-            exit!(format!("Error: A builtin function, '{}' exists with the same name", &name));
+            return Err(format!("Error: A builtin function, '{}' exists with the same name", &name));
         }
         
         if self.is_primitive(&name) {
-            exit!(format!("Error: Cannot name function as primitive type '{}'", name));
+            return Err(format!("Error: Cannot name function as primitive type '{}'", name));
+        }
+
+        let mut parameters = Vec::new();
+        for (_qual, parameter, ty) in declared_parameters {
+            parameters.push( (parameter.clone(), self.validate_type(&ty)?) );
         }
         
         let signature = FunctionSignature {
             name: name.clone(),
-            parameters: parameters.iter().map(|(field, ty)| 
-                            ( field.clone(), self.validate_type(ty) ) 
-                        ).collect(),
+            parameters,
             return_type: ty,
         };
         
         if let Some(old) = self.functions.insert(name, signature) {
-            exit!(format!("Error: Function '{}' was declared multiple times", old.name));
+            Err(format!("Error: Function '{}' was declared multiple times", old.name))
+        } else {
+            Ok(())
         }
     }
 
     /// Validates a function call, returning the function's type.
     /// Constructs vector types similarly.
-    pub fn check_function_call(&self, name: &str, passed_param_types: Vec<String>) -> String {
+    pub fn check_function_call(&self, name: &str, passed_param_types: Vec<String>) -> Result<String, String> {
         if glsl::vec::is_vec_constructor_or_type(name) {
             return glsl::vec::validate_constructor(name, &passed_param_types);
         }
@@ -335,28 +353,28 @@ impl Context {
         
         if let Some(function) = self.functions.get(name) {
             if function.parameters.len() != passed_param_types.len() {
-                exit!(format!("The function '{}' takes {} parameters, but {} were supplied", name, function.parameters.len(), passed_param_types.len()));
+                return Err(format!("The function '{}' takes {} parameters, but {} were supplied", name, function.parameters.len(), passed_param_types.len()));
             }
 
             for ((param_name, param_type), passed_type) in function.parameters.iter().zip(passed_param_types.iter()) {
-                if !castable(passed_type, param_type) {
-                    exit!(format!("The parameter '{}' in function '{}' takes a '{}', but a '{}' was given (cannot cast)",
+                if !castable(passed_type, param_type)? {
+                    return Err(format!("The parameter '{}' in function '{}' takes a '{}', but a '{}' was given (cannot cast)",
                                                         param_name, name, param_type, passed_type));
                 }
             }
 
-            function.return_type.clone()
+            Ok(function.return_type.clone())
         } else {
-            exit!(format!("The function '{}' was not found", name));
+            Err(format!("The function '{}' was not found", name))
         }
     }
 
-    pub fn add_type(&self, left_type: &str, right_type: &str) -> String {
+    pub fn add_type(&self, left_type: &str, right_type: &str) -> Result<String, String> {
         let resulting = match left_type {
             "double" => {
                 match right_type {
                     "double" | "float" | "int" | "uint" => "double",
-                    _ => exit!(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
+                    _ => return Err(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
                 }
             }
             
@@ -364,7 +382,7 @@ impl Context {
                 match right_type {
                     "double" => "double",
                     "float" | "int" | "uint" => "float",
-                    _ => exit!(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
+                    _ => return Err(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
                 }
             }
             
@@ -374,7 +392,7 @@ impl Context {
                     "float" => "float",
                     "int" => "int",
                     "uint" => "int",
-                    _ => exit!(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
+                    _ => return Err(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
                 }
             }
 
@@ -384,7 +402,7 @@ impl Context {
                     "float" => "float",
                     "int" => "int",
                     "uint" => "uint",
-                    _ => exit!(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
+                    _ => return Err(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
                 }
             }
 
@@ -395,7 +413,7 @@ impl Context {
                         if v == r {
                             v
                         } else {
-                            exit!(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            return Err(format!("Error: Cannot add type '{}' to type '{}'", r, v));
                         }
                     }
                     // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
@@ -409,7 +427,7 @@ impl Context {
                         if v == r {
                             v
                         } else {
-                            exit!(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            return Err(format!("Error: Cannot add type '{}' to type '{}'", r, v));
                         }
                     }
                     // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
@@ -423,7 +441,7 @@ impl Context {
                         if v == r {
                             v
                         } else {
-                            exit!(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            return Err(format!("Error: Cannot add type '{}' to type '{}'", r, v));
                         }
                     }
                     // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
@@ -437,60 +455,60 @@ impl Context {
                         if v == r {
                             v
                         } else {
-                            exit!(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            return Err(format!("Error: Cannot add type '{}' to type '{}'", r, v));
                         }
                     }
                     // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
                 }
             }
 
-            _ => exit!(format!("Cannot add/subtract type '{}' with type '{}'", left_type, right_type)),
+            _ => return Err(format!("Cannot add/subtract type '{}' with type '{}'", left_type, right_type)),
         };
 
-        resulting.to_owned()
+        Ok(resulting.to_owned())
     }
 
-    pub fn multiply_type(&self, left_type: &str, right_type: &str) -> String {
+    pub fn multiply_type(&self, left_type: &str, right_type: &str) -> Result<String, String> {
         // TODO: Is it exactly the same?
         self.add_type(left_type, right_type)
     }
 
-    pub fn negate_type(&self, type_name: &str) -> String {
+    pub fn negate_type(&self, type_name: &str) -> Result<String, String> {
         match type_name {
-            "uint" => "int".to_owned(),
+            "uint" => Ok("int".to_owned()),
 
-            "uvec2" => "ivec2".to_owned(),
-            "uvec3" => "ivec3".to_owned(),
-            "uvec4" => "ivec4".to_owned(),
+            "uvec2" => Ok("ivec2".to_owned()),
+            "uvec3" => Ok("ivec3".to_owned()),
+            "uvec4" => Ok("ivec4".to_owned()),
 
-            "bool" | "bvec2" | "bvec3" | "bvec4" => exit!("Cannot negate boolean types".to_owned()),
+            "bool" | "bvec2" | "bvec3" | "bvec4" => return Err("Cannot negate boolean types".to_owned()),
 
             // double, float, int, vec2, vec3, vec4, etc.
             x => {
                 if self.structs.contains_key(x) {
-                    exit!("Only numeric types can be negated".to_owned());
+                    return Err("Only numeric types can be negated".to_owned());
                 }
 
                 // TODO: Need to check more types before this (bvecs, enums, etc.)
-                x.to_owned()
+                Ok(x.to_owned())
             }
         }
     }
 
     /// Returns type_name if it is a valid, previously declared type.
     /// Otherwise, prints error and exits
-    pub fn validate_type(&self, type_name: &str) -> String {
+    pub fn validate_type(&self, type_name: &str) -> Result<String, String> {
         if self.primitive_types.contains(type_name) || self.structs.contains_key(type_name) {
-            type_name.to_owned()
+            Ok(type_name.to_owned())
         } else {   
-            exit!(format!("Error: Unknown or undeclared type '{}'", type_name));
+            Err(format!("Error: Unknown or undeclared type '{}'", type_name))
         }
     }
 
-    pub fn expression_type(&self, expression: &ast::Expression) -> String {
-        match expression {
+    pub fn expression_type(&self, expression: &ast::Expression) -> Result<String, String>{
+        Ok(match expression {
             ast::Expression::Parenthesized(expr) => {
-                self.expression_type(expr.as_ref())
+                self.expression_type(expr.as_ref())?
             }
 
             ast::Expression::Literal(literal) => {
@@ -511,13 +529,13 @@ impl Context {
                         "uint"
                     }
                     
-                    x => exit!(format!("Type of {:?} is not implemented yet", x)),
+                    x => return Err(format!("Type of {:?} is not implemented yet", x)),
                 
                 }.to_owned()
             }
 
             ast::Expression::Identifier(name) => {
-                self.scopes.var_type(name)
+                self.scopes.var_type(name)?
             }
 
             ast::Expression::Binary {ty, ..} => {
@@ -539,6 +557,6 @@ impl Context {
             ast::Expression::Member(member) => {
                 member.ty.clone()
             }
-        }
+        })
     }
 }

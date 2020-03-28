@@ -7,7 +7,7 @@ pub type AST = Vec<Item>;
 pub enum Item {
     Function {
         name: String,
-        parameters: Vec<(String, String)>,
+        parameters: Vec<(Option<FuncParamQualifier>, String, String)>,
         // If not specified, return type will be "void"
         return_type: String,
         statements: Vec<Statement>,

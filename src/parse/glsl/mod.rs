@@ -2,89 +2,89 @@ pub mod vec;
 pub mod mat;
 pub mod functions;
 
+// TODO: Implement vec casts like uvec to ivec, etc.
+
+
 /// Whether a narrowing conversion via 'as' is valid
-pub fn narrow_castable(from: &str, to: &str) -> bool {
+pub fn narrow_castable(from: &str, to: &str) -> Result<bool, String> {
     if from == to {
-        return true;
+        return Ok(true);
     }
 
     match from {
         "double" => {
             match to {
-                "float" | "int" | "uint" => true,
-                _ => false,
+                "float" | "int" | "uint" => Ok(true),
+                _ => Ok(false),
             }
         }
         
         "float" => {
             match to {
-                "double" | "int" | "uint" => true,
-                _ => false,
+                "double" | "int" | "uint" => Ok(true),
+                _ => Ok(false),
             }
         }
 
         "int" => {
             match to {
-                "float" | "double" | "uint" => true,
-                _ => false,
+                "float" | "double" | "uint" => Ok(true),
+                _ => Ok(false),
             }
         }
 
         "uint" => {
             match to {
-                "float" | "int" | "double" => true,
-                _ => false,
+                "float" | "int" | "double" => Ok(true),
+                _ => Ok(false),
             }
         }
 
-        _ => false,
+        x => Err(format!("Type '{}' has no cast implementations. Cannot cast from '{}' to '{}'.", x, from, to)),
     }
 }
 
 /// Whether types can be implicitly cast (non-narrowing cast)
-pub fn castable(from: &str, to: &str) -> bool {
+pub fn castable(from: &str, to: &str) -> Result<bool, String> {
     if from == to {
-        return true;
+        return Ok(true);
     }
-
-    // TODO: Implement vec casts? Like uvec to ivec, etc.
 
     match to {
         "double" => {
             match from {
-                "float" | "int" | "uint" => true,
-                _ => false,
+                "float" | "int" | "uint" => Ok(true),
+                _ => Ok(false),
             }
         }
 
         "float" => {
             match from {
-                "int" | "uint" => true,
-                _ => false,
+                "int" | "uint" => Ok(true),
+                _ => Ok(false),
             }
         }
 
         "int" => {
             match from {
-                "uint" => true,
-                _ => false,
+                "uint" => Ok(true),
+                _ => Ok(false),
             }
         }
 
         "uint" => {
             match from {
-                // "int" => true,
-                _ => false,
+                _ => Ok(false),
             }
         }
 
         "bool" => {
             match from {
-                "double" | "fload" | "int" | "uint" => false,
-                _ => false,
+                "double" | "fload" | "int" | "uint" => Ok(false),
+                _ => Ok(false),
             }
         }
 
-        x => crate::exit!(format!("Type '{}' has no cast implementations. Cannot cast from '{}' to '{}'.", x, from, to)),
+        x => Err(format!("Type '{}' has no cast implementations. Cannot cast from '{}' to '{}'.", x, from, to)),
     }
 }

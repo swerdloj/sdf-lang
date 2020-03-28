@@ -12,6 +12,7 @@ struct SomeStruct {
 }
 
 // Struct implementations have a "self" reference
+// "self" will be marked as "inout", allowing mutation as expected
 impl SomeStruct {
     fn some_function(self, some_input: float) -> float {
         let var: double = 1 - 1.2 as int * 3;
@@ -35,7 +36,7 @@ impl SomeStruct {
     }
 }
 
-fn float_function(x: vec4) -> float {
+fn float_function(in x: vec4) -> float {
     return 1.2;
 }
 
