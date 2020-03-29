@@ -43,18 +43,15 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> Result<String, 
     match function {
         // return_type = function(return_type, return_type or float, return_type or float)
         "clamp" => {
-            let t = if castable(&types[0], "float")? {
-                "float"
-            } else {
-                &types[0]
-            };
-
-            if ((types[0] == types[1]) && (types[1] == types[2]))
-               || ( castable(&types[1], "float")? && castable(&types[2], "float")? )  
+            // FIXME: All four cases aren't need here
+            if (  ( types[0] == types[1]) && (types[1] == types[2]) )
+               || ( types[1] == "float"   && types[2] == types[0]   )
+               || ( types[1] == "float"   && types[2] == "float"    )  
+               || ( types[1] == "float"   && types[2] == types[0]   )
             {
-                match t {
-                    "float" | "vec2" | "vec3" | "vec4" => Ok(t.to_owned()),
-                    _ => Err(format!("Error: '{}' does not accept type '{}'", function, &types[0])),
+                match types[0].as_ref() {
+                    "float" | "vec2" | "vec3" | "vec4" => Ok(types[0].clone()),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[0], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires all three parameters to be same type unless the second and third are floats", function))
@@ -63,21 +60,10 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> Result<String, 
 
         // return_type = function(return_type, return_type, return_type or float)
         "mix" => {
-            let can_cast: bool;
-            let t = if castable(&types[0], "float")? && castable(&types[1], "float")? {
-                can_cast = true;
-                "float"
-            } else {
-                can_cast = false;
-                &types[0]
-            };
-
-            if ((types[0] == types[1]) && (types[1] == types[2]))
-               || ( ((types[0] == types[1]) || can_cast) && castable(&types[2], "float")? )  
-            {
-                match t {
-                    "float" | "vec2" | "vec3" | "vec4" => Ok(t.to_owned()),
-                    _ => Err(format!("Error: '{}' does not accept type '{}'", function, &types[0])),
+            if (types[0] == types[1]) && ((types[1] == types[2]) || types[2] == "float") {
+                match types[0].as_ref() {
+                    "float" | "vec2" | "vec3" | "vec4" => Ok(types[0].clone()),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[2], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires all three parameters to be same type unless the third is a float (got {:?})", function, types))
@@ -86,18 +72,12 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> Result<String, 
 
         // return_type = function(return_type or float, return_type or float, return_type)
         "smoothstep" => {
-            let t = if castable(&types[2], "float")? {
-                "float"
-            } else {
-                &types[2]
-            };
-
             if ((types[0] == types[1]) && (types[1] == types[2]))
-               || ( castable(&types[0], "float")? && castable(&types[1], "float")? )  
+               || ( types[0] == "float" && types[1] == "float" )  
             {
-                match t.as_ref() {
-                    "float" | "vec2" | "vec3" | "vec4" => Ok(t.to_owned()),
-                    _ => Err(format!("Error: '{}' does not accept type '{}'", function, &types[2])),
+                match types[2].as_ref() {
+                    "float" | "vec2" | "vec3" | "vec4" => Ok(types[2].clone()),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[2], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires all three parameters to be same type unless the first and second are floats", function))
@@ -106,19 +86,10 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> Result<String, 
 
         // return_type = function(return_type, return_type, return_type)
         "faceforward" => {
-            let can_cast: bool;
-            let t = if castable(&types[0], "float")? && castable(&types[1], "float")? && castable(&types[2], "float")? {
-                can_cast = true;
-                "float"
-            } else {
-                can_cast = false;
-                &types[0]
-            };
-
-            if ((types[0] == types[1]) && (types[1] == types[2])) || can_cast {
-                match t.as_ref() {
-                    "float" | "vec2" | "vec3" | "vec4" => Ok(t.to_owned()),
-                    _ => Err(format!("Error: '{}' does not accept type '{}'", function, &types[0])),
+            if (types[0] == types[1]) && (types[1] == types[2]) {
+                match types[0].as_ref() {
+                    "float" | "vec2" | "vec3" | "vec4" => Ok(types[0].clone()),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[0], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires all three parameters to be same type", function))
@@ -127,16 +98,10 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> Result<String, 
 
         // return_type = function(return_type, return_type, float)
         "refract" => {
-            let t = if castable(&types[0], "float")? && castable(&types[1], "float")? {
-                "float"
-            } else {
-                &types[0]
-            };
-
-            if (types[0] == types[1]) && castable(&types[2], "float")? {
-                match t {
-                    "float" | "vec2" | "vec3" | "vec4" => Ok(t.to_owned()),
-                    _ => Err(format!("Error: '{}' does not accept type '{}'", function, &types[0])),
+            if (types[0] == types[1]) && (types[2] == "float") {
+                match types[0].as_ref() {
+                    "float" | "vec2" | "vec3" | "vec4" => Ok(types[0].clone()),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[0], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires two of the same types and a float for the third parameter", function))
@@ -144,7 +109,7 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> Result<String, 
         }
 
         "texture2D" => {
-            if types[0] == "sampler2D" && types[1] == "vec2" && types[2] == "float" {
+            if (types[0] == "sampler2D") && (types[1] == "vec2") && (types[2] == "float") {
                 Ok("vec4".to_owned())
             } else {
                 Err(format!("Error: '{}' with three parameters requires 'sampler2D', 'vec2', and 'float'. Found '{:?}'", function, types))
@@ -152,7 +117,7 @@ fn validate_three_params(function: &str, types: &Vec<String>) -> Result<String, 
         }
 
         "textureCube" => {
-            if types[0] == "samplerCube" && types[1] == "vec2" && types[2] == "float" {
+            if (types[0] == "samplerCube") && (types[1] == "vec2") && (types[2] == "float") {
                 Ok("vec4".to_owned())
             } else {
                 Err(format!("Error: '{}' with three parameters requires 'samplerCube', 'vec2', and 'float'. Found '{:?}'", function, types))
@@ -194,19 +159,10 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> Result<String, St
 
         // return_type = function(return_type, return_type)
         "atan" | "pow" | "reflect" => {
-            let can_cast: bool;
-            let t = if castable(&types[0], "float")? && castable(&types[1], "float")? {
-                can_cast = true;
-                "float"
-            } else {
-                can_cast = false;
-                &types[0]
-            };
-
-            if (types[0] == types[1]) || can_cast {
-                match t {
-                    "float" | "vec2" | "vec3" | "vec4" => Ok(t.to_owned()),
-                    _ => Err(format!("Error: '{}' does not work with types '{:?}'", function, types)),
+            if types[0] == types[1] {
+                match types[0].as_ref() {
+                    "float" | "vec2" | "vec3" | "vec4" => Ok(types[0].clone()),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[0], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires two of the same types", function))
@@ -215,19 +171,10 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> Result<String, St
 
         // float = function(type, type)
         "distance" | "dot" => {
-            let can_cast: bool;
-            let t = if castable(&types[0], "float")? && castable(&types[1], "float")? {
-                can_cast = true;
-                "float"
-            } else {
-                can_cast = false;
-                &types[0]
-            };
-
-            if (types[0] == types[1]) || can_cast {
-                match t {
+            if types[0] == types[1] {
+                match types[0].as_ref() {
                     "float" | "vec2" | "vec3" | "vec4" => Ok("float".to_owned()),
-                    _ => Err(format!("Error: '{}' does not work with types '{:?}'", function, types)),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[0], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires two of the same types", function))
@@ -236,16 +183,10 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> Result<String, St
 
         // return_type = function(return_type, return_type or float)
         "mod" | "min" | "max" => {
-            let t = if castable(&types[0], "float")? && castable(&types[1], "float")? {
-                "float"
-            } else {
-                &types[0]
-            };
-
-            if (types[0] == types[1]) || castable(&types[1], "float")? {
-                match t {
-                    "float" | "vec2" | "vec3" | "vec4" => Ok(t.to_owned()),
-                    _ => Err(format!("Error: '{}' does not work with types '{:?}'", function, types)),
+            if (types[0] == types[1]) || types[1] == "float" {
+                match types[0].as_ref() {
+                    "float" | "vec2" | "vec3" | "vec4" => Ok(types[0].clone()),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[0], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires two of the same type unless the second parameter is a float", function))
@@ -254,16 +195,10 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> Result<String, St
 
         // return_type = function(return_type or float, return_type)
         "step" => {
-            let t = if castable(&types[1], "float")? {
-                "float"
-            } else {
-                &types[1]
-            };
-
-            if (types[0] == types[1]) || castable(&types[0], "float")? {
-                match t {
-                    "float" | "vec2" | "vec3" | "vec4" => Ok(t.to_owned()),
-                    _ => Err(format!("Error: '{}' does not work with types '{:?}'", function, types)),
+            if (types[0] == types[1]) || types[0] == "float" {
+                match types[0].as_ref() {
+                    "float" | "vec2" | "vec3" | "vec4" => Ok(types[0].clone()),
+                    _ => Err(format!("Error: '{}' does not accept type '{}' (got {:?})", function, &types[0], types)),
                 }
             } else {
                 Err(format!("Error: '{}' requires two of the same types unless the first parameter is a float", function))

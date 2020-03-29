@@ -1,5 +1,77 @@
-fn sd_circle(point: vec2, radius: float) -> float {
+fn sd_circle(point: vec3, radius: float) -> float {
     return length(point) - radius;
+}
+
+struct Camera {
+    position: vec3 = vec3(0., 4., -5.),
+    lookat: vec3 = vec3(0.),
+    zoom: float = 2.,
+}
+
+impl Camera {
+    fn ray_direction(self, uv: vec2) -> vec3 {
+        let forward = normalize(self.lookat - self.position);
+        let right   = normalize(cross(vec3(0., 1., 0.), forward));
+        let up      = cross(forward, right);
+
+        return normalize(uv.x*right + uv.y*up + self.zoom*forward);
+    }
+}
+
+fn map(point: vec3) -> float {
+    let dist = sd_circle(point - vec3(-1, 0., 0.), 0.5);
+    dist = min(dist, sd_circle(point - vec3(1., 0., 0.), 0.5));
+
+    return dist;
+}
+
+fn get_normal(point: vec3) -> vec3 {
+    let epsilon = vec2(0.001, 0.);
+    let dist = map(point);
+
+    let normal = dist - vec3(
+        map(point - epsilon.xyy),
+        map(point - epsilon.yxy),
+        map(point - epsilon.yyx)
+    );
+
+    return normalize(normal);
+}
+
+fn march(ray_origin: vec3, ray_direction: vec3) -> float {
+    let max_steps = 100;
+    let max_distance = 70;
+    let surface_distance = 0.001;
+
+    let distance = 0.;
+
+    for i in 0 .. max_steps {
+        let current_position = ray_origin + ray_direction * distance;
+        let scene_distance = map(current_position);
+        distance += scene_distance;
+
+        if (distance > max_distance) || (abs(scene_distance) < surface_distance) {
+            break;
+        }
+    }
+
+    return distance;
+}
+
+fn get_diffused_light(point: vec3, light_pos: vec3) -> float {
+    let light_direction = normalize(light_pos - point);
+    let normal = get_normal(point);
+
+    let diffused_light = dot(normal, light_direction);
+    diffused_light = clamp(diffused_light, 0., 1.);
+
+    let dist = march(point + normal*0.001*2., light_direction);
+
+    if dist < length(light_pos - point) {
+        diffused_light *= 0.1;
+    }
+
+    return diffused_light;
 }
 
 fn main() {
@@ -9,17 +81,23 @@ fn main() {
 
     let color = vec3(0.);
 
-    let radius = 0.4;
-    let pos = uv - vec2(cos(time)*0.05, sin(time)*0.08);
-    let dist = sd_circle(pos, radius)*0.7;
+    let camera: Camera {
+        position: vec3(0., 0., -3.),
+    };
+    let ray_direction = camera.ray_direction(uv);
 
-    dist -= sin(uv.x * 5. + time * 4.) * 0.05;
-    dist -= sin(uv.y * 3.5 + time * 2.) * 0.1;
+    let dist = march(camera.position, ray_direction);
+    let position = camera.position + ray_direction * dist;
 
-    color += smoothstep(0.005, 0., dist);
-    color += 1./(dist*dist + 1.)*0.5;
+    let light = get_diffused_light(position, vec3(sin(time)*5, 1., -5.));
+    color = vec3(light);
 
-    color *= vec3(sin(time*0.7)*0.2, sin(time*0.4)*0.1, cos(time*0.8)*0.6) + 0.5;
+    // fog
+    color = mix(color, vec3(0.1, 0.1, 0.2), 1. - exp(-0.001 * dist * dist));
+
+    // TODO: Why does using sqrt or 0.4545 give banding?
+    // color = sqrt(color);
+    color = pow(color, vec3(0.45));
     
-    out_color = vec4(sqrt(color), 1.);
+    out_color = vec4(color, 1.);
 }

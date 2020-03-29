@@ -370,6 +370,7 @@ impl Context {
     }
 
     pub fn add_type(&self, left_type: &str, right_type: &str) -> Result<String, String> {
+        // TODO: when the right_type is a vec type
         let resulting = match left_type {
             "double" => {
                 match right_type {
@@ -382,6 +383,7 @@ impl Context {
                 match right_type {
                     "double" => "double",
                     "float" | "int" | "uint" => "float",
+                    x @ "vec2" | x @ "vec3" | x @ "vec4" => x,
                     _ => return Err(format!("Types '{}' and '{}' are incompatible or not implemented", left_type, right_type)),
                 }
             }
