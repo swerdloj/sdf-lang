@@ -36,6 +36,12 @@ pub enum FuncParamQualifier {
 }
 
 #[derive(Debug, Clone)]
+pub struct SpannedExpression {
+    pub expression: Expression,
+    pub span: (usize, usize),
+}
+
+#[derive(Debug, Clone)]
 pub enum Expression {
     Parenthesized(Box<Expression>),
     Literal(Literal),
@@ -116,7 +122,7 @@ pub enum Statement {
         tag: Option<Tag>,
         ident: String,
         ty: Option<String>,
-        expression: Option<Expression>,
+        expression: Option<SpannedExpression>,
     },
     LetConstructor {
         ident: String,
@@ -125,7 +131,7 @@ pub enum Statement {
     Assignment {
         lhs: IdentOrMember,
         op: AssignmentOperator,
-        expression: Expression,
+        expression: SpannedExpression,
     },
     Return {
         expression: Option<Expression>,
@@ -142,7 +148,11 @@ pub enum Statement {
     },
     Continue,
     Break,
-    Expression(Expression),
+    // FIXME: Parser cannot put a SpannedExpression here for some reason
+    Expression {
+        expression: Expression,
+        span: (usize, usize),
+    },
 }
 
 #[derive(Debug, Clone)]

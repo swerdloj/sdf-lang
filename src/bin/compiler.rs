@@ -6,10 +6,10 @@ use sdf_lang::{
 
 fn main() -> Result<(), std::io::Error> {
     let env = environment::Environment::get();
-
-    // Note that file's existence will be checked already
-    let input = std::fs::read_to_string(&env.input_path)?;
     println!("{:#?}\n", env);
+    
+    // Note that file's existence will be checked already
+    let input = parse::Input::from_path(&env.input_path)?;
     
     // Print any parse errors, then exit. Otherwise, return AST
     let mut ast = parse::parse(&input).map_err(|e| 
@@ -17,7 +17,7 @@ fn main() -> Result<(), std::io::Error> {
     ).unwrap();
     
     // Stores information about structs, scenes, functions, and identifiers
-    let context = translate::validate(&mut ast).map_err(|e| 
+    let context = translate::validate(&mut ast, &input).map_err(|e| 
         exit!(format!("Semantic Error: {}", e)) 
     ).unwrap();
 

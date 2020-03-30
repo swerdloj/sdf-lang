@@ -69,7 +69,7 @@ impl Application {
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. } => {
-                        crate::exit!("Quitting...".to_owned());
+                        crate::exit!("Quitting...");
                     }
 
                     Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
@@ -91,6 +91,7 @@ impl Application {
                 }
             }
 
+            // TODO: Use delta time so it can be paused and controlled
             // Time is in seconds
             self.runtime.set_time(self.timer.ticks() as f32 / 1000f32);
 

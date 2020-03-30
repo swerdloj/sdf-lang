@@ -10,7 +10,7 @@ use crate::parse::glsl;
 // to account for.
 //
 // Note that nested items are translated recursively (for bottom-up type analysis like expressions)
-pub fn validate(ast: &mut AST) -> Result<Context, String> {
+pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, String> {
     let mut context = Context::new();
 
     for item in ast {
@@ -31,13 +31,12 @@ pub fn validate(ast: &mut AST) -> Result<Context, String> {
                 }
 
                 for statement in statements {
-                    validate_statement(statement, &mut context)?;
+                    validate_statement(statement, &mut context, input)?;
                 }
 
                 context.scopes.pop_scope();
             }
 
-            // TODO: 'self' parameter should be marked as 'inout'
             Item::Implementation { struct_name, functions  } => {
                 context.validate_type(struct_name)?;
                 context.declare_implementation(struct_name)?;
@@ -50,6 +49,8 @@ pub fn validate(ast: &mut AST) -> Result<Context, String> {
                     match function {
                         Item::Function { name, parameters, return_type, statements } => {
                             if parameters.len() > 0 {
+                                // TODO: If unspecified, "self" will be marked as "inout"
+                                //       Otherwise, don't force "inout"
                                 parameters[0] = (Some(FuncParamQualifier::InOut), "self".to_owned(), format!("{}", struct_name));
                             } else {
                                 return Err(format!("Implementation function '{}.{}' must reference 'self'", struct_name, name));
@@ -67,7 +68,7 @@ pub fn validate(ast: &mut AST) -> Result<Context, String> {
                             }
 
                             for statement in statements {
-                                validate_statement(statement, &mut context)?;
+                                validate_statement(statement, &mut context, input)?;
                             }
 
                             context.scopes.pop_scope();
@@ -86,7 +87,8 @@ pub fn validate(ast: &mut AST) -> Result<Context, String> {
     Ok(context)
 }
 
-fn validate_statement(statement: &mut Statement, context: &mut Context) -> Result<(), String> {
+// TODO: Give statements their own span
+fn validate_statement(statement: &mut Statement, context: &mut Context, input: &crate::parse::Input) -> Result<(), String> {
     match statement {
         Statement::Continue | Statement::Break => {
             if !context.scopes.is_within_loop() {
@@ -94,16 +96,18 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
             }
         }
 
-        Statement::Let { ident, tag, ty, expression } => {
+        Statement::Let { ident, tag, ty, expression } => {                       
             if ident.starts_with("gl_") {
                 return Err(format!("The prefix 'gl_' is reserved (used in '{}')", ident));
             }
             
             if let Some(assignment) = expression {
-                validate_expression(assignment, context)?;
+                validate_expression(&mut assignment.expression, context, input).map_err(|e|
+                    format!("{}\n{}", input.evaluate_span(assignment.span), e)
+                )?;
 
                 // Special cases
-                if let Expression::Literal(lit) = assignment {
+                if let Expression::Literal(lit) = &mut assignment.expression {
                     if let Literal::Int(i) = lit {
                         if let Some(t) = ty {
                             if t == "uint" {
@@ -111,7 +115,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
                             }
                         }
                     }
-                } else if context.expression_type(assignment)? == "uint" {
+                } else if context.expression_type(&mut assignment.expression)? == "uint" {
                     if let Some(t) = ty {
                         if t == "int" {
                             return Err(format!("Cannot assign 'int' to 'uint' expression"));
@@ -145,8 +149,15 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
                 context.validate_type(specified_type)?;
                 // Check whether type assigned is compatible with user-specified
                 if let Some(assignment) = expression {                    
-                    let assigned_type = context.expression_type(assignment)?;
-                    if !glsl::castable(&assigned_type, &specified_type)? {
+                    let assigned_type = context.expression_type(&mut assignment.expression).map_err(|e| 
+                        format!("{}\n{}", input.evaluate_span(assignment.span), e)
+                    )?;
+
+                    let castable = glsl::castable(&assigned_type, &specified_type).map_err(|e| 
+                        format!("{}\n{}", input.evaluate_span(assignment.span), e)
+                    )?;
+
+                    if !castable {
                         return Err(format!("Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
                                                    &ident, &specified_type, &assigned_type));
                     }
@@ -155,11 +166,13 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
             } else {
                 // Make sure inferred type is valid (not void like a void function call)
                 if let Some(assignment) = &expression {
-                    let expr_type = context.expression_type(&assignment)?;
+                    let expr_type = context.expression_type(&assignment.expression).map_err(|e| 
+                        format!("{}\n{}", input.evaluate_span(assignment.span), e)
+                    )?;
                     if expr_type != "void" {
                         Some(expr_type)
                     } else {
-                        return Err(format!("Variable '{}' was assigned type 'void'.", &ident));
+                        return Err(format!("{}\nVariable '{}' was assigned type 'void'.", input.evaluate_span(assignment.span), &ident));
                     }
                 } else {
                     None
@@ -175,7 +188,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
             context.add_var_to_scope(ident.clone(), constructor.ty.clone())?;
             
             for (_ident, field) in &mut constructor.fields {
-                validate_expression(field, context)?;
+                validate_expression(field, context, input)?;
             }
             
             // Order the fields and fill in defaults
@@ -220,8 +233,12 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
             }
 
             // rhs
-            validate_expression(expression, context)?;
-            let expr_type = context.expression_type(expression)?;
+            validate_expression(&mut expression.expression, context, input).map_err(|e| 
+                format!("{}\n{}", input.evaluate_span(expression.span), e)
+            )?;
+            let expr_type = context.expression_type(&expression.expression).map_err(|e| 
+                format!("{}\n{}", input.evaluate_span(expression.span), e)
+            )?;
 
             let result_type = match op {
                 AssignmentOperator::Assign => {
@@ -235,19 +252,23 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
                 }
             };
 
-            if !glsl::castable(&result_type, &lhs_type)? {
+            let castable = glsl::castable(&result_type, &lhs_type).map_err(|e|
+                format!("{}\n{}", input.evaluate_span(expression.span), e)
+            )?;
+
+            if !castable {
                 return Err(format!("Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &result_type));
             }
         }
 
         Statement::Return { expression } => {
             if let Some(expr) = expression {
-                validate_expression(expr, context)?;
+                validate_expression(expr, context, input)?;
             }
         }
 
         Statement::For { loop_var, from, to, block } => {
-            println!("WARNING: For loops are not fully implemented. Use a while loop instead.");
+            // println!("WARNING: For loops are not fully implemented. Use a while loop instead.");
             
             context.scopes.push_scope("loop");
             
@@ -261,7 +282,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
             }
 
             for statement in block {
-                validate_statement(statement, context)?;
+                validate_statement(statement, context, input)?;
             }
 
             context.scopes.pop_scope();
@@ -275,30 +296,32 @@ fn validate_statement(statement: &mut Statement, context: &mut Context) -> Resul
             context.scopes.push_scope("loop");
 
             for statement in block {
-                validate_statement(statement, context)?;
+                validate_statement(statement, context, input)?;
             }
 
             context.scopes.pop_scope();
         }
 
-        Statement::Expression(expr) => {
-            validate_expression(expr, context)?;
+        Statement::Expression{ expression, span} => {
+            validate_expression(expression, context, input).map_err(|e|
+                format!("{}\n{}", input.evaluate_span(*span), e)
+            )?;
         }
     }
 
     Ok(())
 }
 
-fn validate_expression(expression: &mut Expression, context: &mut Context) -> Result<(), String> {
+fn validate_expression(expression: &mut Expression, context: &mut Context, input: &crate::parse::Input) -> Result<(), String> {
     match expression {
         Expression::Parenthesized(expr) => {
-            validate_expression(expr.as_mut(), context)?;
+            validate_expression(expr.as_mut(), context, input)?;
         }
 
         Expression::FunctionCall(call) => {
             let mut param_types = Vec::new();
             for expr in call.parameters.iter_mut() {
-                validate_expression(expr, context)?;
+                validate_expression(expr, context, input)?;
                 param_types.push(context.expression_type(expr)?);
             }
             
@@ -308,7 +331,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) -> Re
         }
 
         Expression::Unary { operator, rhs, ty } => {
-            validate_expression(rhs, context)?;
+            validate_expression(rhs, context, input)?;
 
             match operator {
                 UnaryOperator::Negate => {
@@ -367,7 +390,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) -> Re
 
                         let mut param_types = Vec::new();
                         for expr in func.parameters.iter_mut() {
-                            validate_expression(expr, context)?;
+                            validate_expression(expr, context, input)?;
                             param_types.push(context.expression_type(expr)?);
                         }
 
@@ -383,8 +406,8 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) -> Re
         }
 
         Expression::Binary { lhs, operator, rhs, ty } => {            
-            validate_expression(lhs, context)?;
-            validate_expression(rhs, context)?;
+            validate_expression(lhs, context, input)?;
+            validate_expression(rhs, context, input)?;
 
             match operator {
                 // TODO: Some operators like "&&" require lhs and rhs to both be boolean
@@ -437,24 +460,24 @@ fn validate_expression(expression: &mut Expression, context: &mut Context) -> Re
         // TODO: `If` is currently only treated as a statement. 
         //       Implement typing and translation for expression usage.
         Expression::If { expression, if_block, else_block, else_if_block, ty } => {
-            validate_expression(expression, context)?;
+            validate_expression(expression, context, input)?;
 
             context.scopes.push_scope("if");
             for statement in if_block {
-                validate_statement(statement, context)?;
+                validate_statement(statement, context, input)?;
             }
             context.scopes.pop_scope();
             
             if let Some(block_statements) = else_block {
                 context.scopes.push_scope("if");
                 for statement in block_statements {
-                    validate_statement(statement, context)?;
+                    validate_statement(statement, context, input)?;
                 }
                 context.scopes.pop_scope();
             }
 
             if let Some(else_if_expr) = else_if_block {
-                validate_expression(else_if_expr, context)?;
+                validate_expression(else_if_expr, context, input)?;
             }
 
             // Condition must be type "bool"

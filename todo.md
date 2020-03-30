@@ -31,4 +31,5 @@
 - Scenes
 
 ## **Runtime**
-- Everything
+- User-declared uniforms
+- Console

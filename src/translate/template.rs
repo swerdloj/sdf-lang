@@ -156,7 +156,7 @@ pub fn translate_statement(statement: &Statement) -> String {
             glsl.push_str(&format!("{} {}", &ty.as_ref().unwrap(), ident));
 
             if let Some(assignment) = expr {
-                glsl.push_str(&format!(" = {}", translate_expression(assignment)));
+                glsl.push_str(&format!(" = {}", translate_expression(&assignment.expression)));
             }
 
         }
@@ -198,11 +198,11 @@ pub fn translate_statement(statement: &Statement) -> String {
                 AssignmentOperator::SubtractAssign => "-=",
                 AssignmentOperator::MultiplyAssign => "*=",
                 AssignmentOperator::DivideAssign => "/=",
-            }, translate_expression(&expr)));
+            }, translate_expression(&expr.expression)));
         }
         
-        Statement::Expression(expr) => {
-            glsl.push_str(&translate_expression(expr));
+        Statement::Expression{expression, span: _} => {
+            glsl.push_str(&translate_expression(expression));
         }
     }
 

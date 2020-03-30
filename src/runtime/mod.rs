@@ -6,11 +6,13 @@ use gl::types::*;
 pub mod application;
 pub mod opengl;
 
+use crate::parse;
+
 use std::path::PathBuf;
 use std::collections::HashMap;
 
 pub struct Runtime {
-    sdf_file: PathBuf,
+    sdf_path: PathBuf,
     /// name -> (location, type)
     uniforms: HashMap<String, (usize, String)>,
     /// One VAO must be bound to draw anything
@@ -18,32 +20,33 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn new<P: Into<PathBuf>>(sdf_file: P) -> Self {
+    pub fn new<P: Into<PathBuf>>(sdf_path: P) -> Self {
         let dummy_vao = opengl::DummyVAO::new();
         dummy_vao.bind();
 
         Runtime {
-            sdf_file: sdf_file.into(),
+            sdf_path: sdf_path.into(),
             uniforms: HashMap::new(),
             _dummy_vao: dummy_vao,
         }
     }
 
     // TODO: Consider having this return a result
-    pub fn reload_shader(&mut self) {
-        let input = std::fs::read_to_string(&self.sdf_file).unwrap();
+    pub fn reload_shader(&mut self) {      
+        let input = parse::Input::from_path(&self.sdf_path).unwrap();
         
-        let mut ast = crate::parse::parse(&input);
+        let mut ast = parse::parse(&input);
         if ast.is_err() {
-            println!("\nParse Error: {}", ast.err().unwrap());
-            println!("A shader error prevented reloading\n");
+            println!("\nA shader error prevented reloading: ");
+            println!("{}\n", ast.err().unwrap());
             return;
         }
 
-        let context = crate::translate::validate(ast.as_mut().unwrap());
+        let context = crate::translate::validate(ast.as_mut().unwrap(), &input);
         if context.is_err() {
-            context.map_err(|e| println!("\nSemantic Error: {}", e));
-            println!("A shader error prevented reloading\n");
+            println!("\nA shader error prevented reloading: ");
+            println!("{}\n", context.err().unwrap());
+            // context.map_err(|e| println!("{}\n", e));
             return;
         }
 

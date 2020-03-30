@@ -95,10 +95,10 @@ fn builtins() {
     let c = mix(vec3(2.), vec3(0.1), 1 - exp(-0.001));
     let d = pow(c, vec3(0.45));
     let e = fract(sin(cos(123)));
-    let f = pow(1, atan(1, 2.3));
-    let g = mod(d.yx, 2);
+    let f = pow(1., atan(1., 2.3));
+    let g = mod(d.yx, 2.);
     let h = min(max(a, c), distance(a, vec3(g, a.z)));
-    let i = clamp(vec4(1, a), 2., 3);
+    let i = clamp(vec4(1., a), 2., 3.);
     let j = smoothstep(b, c.x, a.zzy);
     let k = dot(a, cross(i.xyz, vec3(i.w)));
     // ... and more

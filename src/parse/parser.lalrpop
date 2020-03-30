@@ -161,9 +161,18 @@ Statement: ast::Statement = {
 
     <LoopControl> ";" => <>,
 
-    <Expression> ";" => ast::Statement::Expression(<>),
+    // <SpannedExpression> ";" => ast::Statement::Expression(<>),
     
-    <IfExpr> => ast::Statement::Expression(<>),
+    // FIXME: The above won't work for some reason
+    <l:@L> <expr:Expression> <r:@R> ";" => ast::Statement::Expression {
+        expression: expr,
+        span: (l, r),
+    },
+
+    <l:@L> <expr:IfExpr> <r:@R> => ast::Statement::Expression{ 
+        expression: expr,
+        span: (l, r),
+    },
 }
 
 #[inline]
@@ -200,7 +209,7 @@ StatementBlock: Vec<ast::Statement> = {
 }
 
 AssignmentStatement: ast::Statement = {
-    <lhs:IdentOrMember> <op:AssignmentOperator> <expr:Expression> ";" => {
+    <lhs:IdentOrMember> <op:AssignmentOperator> <expr:SpannedExpression> ";" => {
         ast::Statement::Assignment {
             lhs,
             op,
@@ -217,7 +226,7 @@ IdentOrMember: ast::IdentOrMember = {
     
 LetStatement: ast::Statement = {
     <tag:("@" <Tag>)?>
-    "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <Expression>)?> ";" => { 
+    "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <SpannedExpression>)?> ";" => { 
         if ty.is_none() && expr.is_none() {
             exit!(format!("Error: Standalone let statements like 'let {};' are not yet implemented", &id));
         }
@@ -256,6 +265,13 @@ ConstructorArgs: Vec<(String, ast::Expression)> = {
 }
 
 // ---------------- EXPRESSION ----------------
+
+SpannedExpression: ast::SpannedExpression = {
+    <l:@L> <expr:Expression> <r:@R> => ast::SpannedExpression {
+        expression: expr,
+        span: (l, r),
+    }
+}
 
 Expression: ast::Expression = {
     BooleanExpr => <>,

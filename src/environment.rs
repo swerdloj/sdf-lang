@@ -22,7 +22,7 @@ impl Environment {
         let mut file = fs::File::create(&self.output_path)?;
         file.write_fmt(format_args!("{}", output_glsl))?;
 
-        println!("GLSL saved to {:?}", &self.output_path);
+        println!("GLSL saved to {}", &self.output_path.display());
 
         Ok(())
     }
@@ -39,7 +39,7 @@ impl Environment {
         let mut file = fs::File::create(&ast_path)?;
         file.write_fmt(format_args!("{:#?}", &ast))?;
 
-        println!("AST saved to {:?}", &ast_path);
+        println!("AST saved to {}", &ast_path.display());
 
         Ok(())
     }
