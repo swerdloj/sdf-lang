@@ -10,7 +10,7 @@ pub struct Application {
     window: sdl2::video::Window,
     gl_context: sdl2::video::GLContext,
 
-    timer: sdl2::TimerSubsystem,
+    timer: super::timing::Timer,
 
     runtime: super::Runtime,
 }
@@ -41,7 +41,7 @@ impl Application {
         opengl::set_clear_color(0.1, 0.1, 0.2);
         opengl::set_viewport(800, 600);
 
-        let timer = sdl2_context.timer().expect("Failed to initialize timer subsystem");
+        let timer = super::timing::Timer::from_sdl2_context(&sdl2_context);
 
         Application {
             sdl2_context,
@@ -59,6 +59,7 @@ impl Application {
         self.runtime.reload_shader();
         self.runtime.set_window_dimensions(800, 600);
 
+        self.timer.start();
         let mut event_pump = self.sdl2_context.event_pump().expect("Failed to obtain event pump");
 
         loop {
@@ -80,6 +81,14 @@ impl Application {
                         self.runtime.set_window_dimensions(width as i32, height as i32);
                     }
 
+                    Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
+                        if self.timer.toggle_paused() {
+                            println!("Pausing timer");
+                        } else {
+                            println!("Unpausing timer");
+                        }
+                    }
+
                     Event::Window { win_event: WindowEvent::SizeChanged(width, height), .. } => {
                         println!("Window resized to {}x{}", &width, &height);
 
@@ -91,13 +100,12 @@ impl Application {
                 }
             }
 
-            // TODO: Use delta time so it can be paused and controlled
-            // Time is in seconds
-            self.runtime.set_time(self.timer.ticks() as f32 / 1000f32);
-
-            self.runtime.render();
-
+            // Set time in seconds
+            self.timer.tick();
+            self.runtime.set_time(self.timer.elapsed as f32 / 1000f32);
+            
             // Render screen buffer
+            self.runtime.render();
             self.window.gl_swap_window();
         }
     }

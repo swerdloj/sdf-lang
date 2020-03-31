@@ -108,15 +108,15 @@ pub fn translate_statement(statement: &Statement) -> String {
     let mut glsl = String::new();
 
     match statement {
-        Statement::Continue => {
+        Statement::Continue(_span) => {
             glsl.push_str("continue");
         }
-        Statement::Break => {
+        Statement::Break(_span) => {
             glsl.push_str("break");
         }
 
         Statement::While { condition, block } => {
-            glsl.push_str(&format!("while ({}) {{\n", translate_expression(condition)));
+            glsl.push_str(&format!("while ({}) {{\n", translate_expression(&condition.expression)));
 
             for block_stmt in block {
                 glsl.push_str(&format!("\t\t{}", translate_statement(block_stmt)));
@@ -129,7 +129,9 @@ pub fn translate_statement(statement: &Statement) -> String {
         Statement::For { loop_var, from, to, block } => {
             // TODO: Require the expressions to be compile-time, then determine
             //       whether the loop should be > or < and ++ or --
-            glsl.push_str(&format!("for (int {} = {}; {} < {}; ++{}) {{\n", loop_var, translate_expression(from), loop_var, translate_expression(to), loop_var));
+            glsl.push_str(&format!("for (int {} = {}; {} < {}; ++{}) {{\n", 
+                                            loop_var, translate_expression(&from.expression), 
+                                            loop_var, translate_expression(&to.expression), loop_var));
             
             for block_stmt in block {
                 glsl.push_str(&format!("\t\t{}", translate_statement(block_stmt)));
@@ -140,7 +142,7 @@ pub fn translate_statement(statement: &Statement) -> String {
 
         Statement::Return { expression: expr } => {
             if let Some(ret_expr) = expr {
-                glsl.push_str(&format!("return {}", translate_expression(ret_expr)));
+                glsl.push_str(&format!("return {}", translate_expression(&ret_expr.expression)));
             } else {
                 glsl.push_str(&format!("return"));
             }
@@ -166,7 +168,7 @@ pub fn translate_statement(statement: &Statement) -> String {
             let mut fields = String::new();
 
             for (_field_name, expr) in &constructor.fields {
-                fields.push_str(&format!("{}, ", translate_expression(&expr)));
+                fields.push_str(&format!("{}, ", translate_expression(&expr.expression)));
             }
 
             // Remove trailing ", "

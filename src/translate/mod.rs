@@ -1,7 +1,7 @@
 pub mod template;
 
 use crate::parse::ast::*;
-use crate::parse::context::Context;
+use crate::parse::context::{Context, ScopeType};
 use crate::parse::glsl;
 
 // The parser generates an AST from the bottom up. This is an issue because expressions
@@ -24,7 +24,7 @@ pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, S
             Item::Function { name, parameters, return_type, statements } => {               
                 context.declare_function(name.clone(), parameters.clone(), return_type.clone())?;
 
-                context.scopes.push_scope("function");
+                context.scopes.push_scope(ScopeType::Function{ return_type: return_type.clone() });
 
                 for (_param_qual, param_name, param_type) in parameters {
                     context.add_var_to_scope(param_name.clone(), param_type.clone())?;
@@ -61,7 +61,7 @@ pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, S
                             
                             context.declare_function(name.to_owned(), parameters.clone(), return_type.clone())?;
                             
-                            context.scopes.push_scope("impl");
+                            context.scopes.push_scope(ScopeType::Function{ return_type: return_type.clone() });
 
                             for (_qual, param_name, param_type) in parameters {
                                 context.add_var_to_scope(param_name.clone(), param_type.clone())?;
@@ -90,9 +90,9 @@ pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, S
 // TODO: Give statements their own span
 fn validate_statement(statement: &mut Statement, context: &mut Context, input: &crate::parse::Input) -> Result<(), String> {
     match statement {
-        Statement::Continue | Statement::Break => {
+        Statement::Continue(span) | Statement::Break(span) => {
             if !context.scopes.is_within_loop() {
-                return Err(format!("'continue' and 'break' are only valid within a loop (found in a {})", context.scopes.current_kind()));
+                return Err(format!("{}\n'continue' and 'break' are only valid within a loop (found in a {:?})", input.evaluate_span(*span), context.scopes.current_kind()));
             }
         }
 
@@ -118,7 +118,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
                 } else if context.expression_type(&mut assignment.expression)? == "uint" {
                     if let Some(t) = ty {
                         if t == "int" {
-                            return Err(format!("Cannot assign 'int' to 'uint' expression"));
+                            return Err(format!("{}\nCannot assign 'int' to 'uint' expression", input.evaluate_span(assignment.span)));
                         }
                     }
                 }
@@ -158,8 +158,8 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
                     )?;
 
                     if !castable {
-                        return Err(format!("Variable '{}' was declared as a '{}', but assigned to an incompatible type: '{}'",
-                                                   &ident, &specified_type, &assigned_type));
+                        return Err(format!("{}\nVariable '{}' was declared as type '{}', but assigned to an incompatible type: '{}'",
+                                                input.evaluate_span(assignment.span), &ident, &specified_type, &assigned_type));
                     }
                 }
                 Some(specified_type.clone())
@@ -188,15 +188,24 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
             context.add_var_to_scope(ident.clone(), constructor.ty.clone())?;
             
             for (_ident, field) in &mut constructor.fields {
-                validate_expression(field, context, input)?;
+                validate_expression(&mut field.expression, context, input)?;
             }
             
             // Order the fields and fill in defaults
-            constructor.fields = context.generate_constructor(&constructor.ty, constructor.fields.clone())?;
+            constructor.fields = context.generate_constructor(&constructor.ty, constructor.fields.clone()).map_err(|e|
+                // FIXME: Temporary hack to get a span for the LetConstructor
+                if let Some(a) = constructor.fields.get(0) {
+                    format!("{}\n{}", input.evaluate_span(a.1.span), e)
+                } else {
+                    e
+                }
+            )?;
         }
 
         // The 'op' should not influence anything here
         Statement::Assignment { lhs, op, expression } => {
+            let span = input.evaluate_span(expression.span);
+            
             let mut lhs_type = String::from("temp");
 
             match lhs {
@@ -225,7 +234,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
 
                             // TODO: Is this always true? Or are there cases where this would be valid?
                             IdentOrFunction::Function(func) => {
-                                return Err(format!("Cannot assign to '.' operator with function call '{}'", func.name));
+                                return Err(format!("{}, Cannot assign to '.' operator with function call '{}'", span, func.name));
                             }
                         }
                     }
@@ -234,10 +243,10 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
 
             // rhs
             validate_expression(&mut expression.expression, context, input).map_err(|e| 
-                format!("{}\n{}", input.evaluate_span(expression.span), e)
+                format!("{}\n{}", span, e)
             )?;
             let expr_type = context.expression_type(&expression.expression).map_err(|e| 
-                format!("{}\n{}", input.evaluate_span(expression.span), e)
+                format!("{}\n{}", span, e)
             )?;
 
             let result_type = match op {
@@ -248,35 +257,68 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
                 _ => {                    
                     // The result of (lhs op rhs) should be castable to the type of (lhs)
                     // This is useful for types like 'vec' where (lhs op rhs) is not always obvious
-                    context.add_type(&lhs_type, &expr_type)?
+                    context.add_type(&lhs_type, &expr_type).map_err(|e|
+                        format!("{}\n{}", span, e)
+                    )?
                 }
             };
 
             let castable = glsl::castable(&result_type, &lhs_type).map_err(|e|
-                format!("{}\n{}", input.evaluate_span(expression.span), e)
+                format!("{}\n{}", span, e)
             )?;
 
             if !castable {
-                return Err(format!("Invalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", &lhs_type, &result_type));
+                return Err(format!("{}\nInvalid assignment statement. Cannot assign type '{}' to incompatible type '{}'", span, &lhs_type, &result_type));
             }
         }
 
+        // TODO: Ensure non-void function always return
+        // TODO: Ensure if statements always lead to eventual returns
         Statement::Return { expression } => {
+            let expected_type = context.scopes.expected_return_type()?;            
+
             if let Some(expr) = expression {
-                validate_expression(expr, context, input)?;
+                let span = input.evaluate_span(expr.span);
+
+                validate_expression(&mut expr.expression, context, input).map_err(|e|
+                    format!("{}\n{}", span, e)
+                )?;
+
+                let ty = context.expression_type(&expr.expression).map_err(|e|
+                    format!("{}\n{}", span, e)
+                )?;
+
+                let castable = glsl::castable(&ty, &expected_type).map_err(|e| 
+                    format!("{}\n{}", span, e)
+                )?;
+
+                if !castable {
+                    return Err(format!("{}\nExpected return type of '{}', but got incompatible type '{}'", span, expected_type, ty));
+                }
+            } else {
+                if expected_type != "void" {
+                    return Err(format!("Expected a '{}' return type, but found none", expected_type));
+                }
             }
         }
 
         Statement::For { loop_var, from, to, block } => {
             // println!("WARNING: For loops are not fully implemented. Use a while loop instead.");
             
-            context.scopes.push_scope("loop");
+            context.scopes.push_scope(ScopeType::Loop);
             
-            let from_type = context.expression_type(from)?;
-            let to_type = context.expression_type(to)?;
+            let from_type = context.expression_type(&from.expression).map_err(|e|
+                format!("{}\n{}", input.evaluate_span(from.span), e)
+            )?;
+            let to_type = context.expression_type(&to.expression).map_err(|e|
+                format!("{}\n{}", input.evaluate_span(to.span), e)
+            )?;
 
             if (from_type == "int" || from_type == "uint") && (to_type == "int" || to_type == "uint") {
-                context.add_var_to_scope(loop_var.clone(), "int".to_owned())?;
+                context.add_var_to_scope(loop_var.clone(), "int".to_owned()).map_err(|e| 
+                    // FIXME: Using "from.span" is a (viable) hack. Should use the for's span when implemented
+                    format!("{}\n{}", input.evaluate_span(from.span), e)
+                )?;
             } else {
                 return Err("For loops only support integers for now".to_owned());
             }
@@ -289,11 +331,17 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
         }
 
         Statement::While { condition, block } => {
-            if context.expression_type(condition)? != "bool" {
-                return Err("While loop condition must be boolean.".to_owned());
+            let span = input.evaluate_span(condition.span);
+            
+            let expr_type = context.expression_type(&condition.expression).map_err(|e|
+                format!("{}\n{}", span, e)
+            )?;
+
+            if expr_type != "bool" {
+                return Err(format!("{}\nWhile loop condition must be boolean", span));
             }
 
-            context.scopes.push_scope("loop");
+            context.scopes.push_scope(ScopeType::Loop);
 
             for statement in block {
                 validate_statement(statement, context, input)?;
@@ -462,14 +510,14 @@ fn validate_expression(expression: &mut Expression, context: &mut Context, input
         Expression::If { expression, if_block, else_block, else_if_block, ty } => {
             validate_expression(expression, context, input)?;
 
-            context.scopes.push_scope("if");
+            context.scopes.push_scope(ScopeType::If);
             for statement in if_block {
                 validate_statement(statement, context, input)?;
             }
             context.scopes.pop_scope();
             
             if let Some(block_statements) = else_block {
-                context.scopes.push_scope("if");
+                context.scopes.push_scope(ScopeType::If);
                 for statement in block_statements {
                     validate_statement(statement, context, input)?;
                 }

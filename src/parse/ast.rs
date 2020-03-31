@@ -2,6 +2,7 @@
 
 /// AST root
 pub type AST = Vec<Item>;
+pub type Span = (usize, usize);
 
 #[derive(Debug)]
 pub enum Item {
@@ -77,7 +78,7 @@ pub struct FunctionCall {
 
 #[derive(Debug, Clone)]
 pub struct Constructor {
-    pub fields: Vec<(String, Expression)>,
+    pub fields: Vec<(String, SpannedExpression)>,
     pub ty: String,
 }
 
@@ -134,24 +135,24 @@ pub enum Statement {
         expression: SpannedExpression,
     },
     Return {
-        expression: Option<Expression>,
+        expression: Option<SpannedExpression>,
     },
     For {
         loop_var: String,
-        from: Expression,
-        to: Expression,
+        from: SpannedExpression,
+        to: SpannedExpression,
         block: Vec<Statement>,
     },
     While {
-        condition: Expression,
+        condition: SpannedExpression,
         block: Vec<Statement>,
     },
-    Continue,
-    Break,
+    Continue(Span),
+    Break(Span),
     // FIXME: Parser cannot put a SpannedExpression here for some reason
     Expression {
         expression: Expression,
-        span: (usize, usize),
+        span: Span,
     },
 }
 

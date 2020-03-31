@@ -1,6 +1,9 @@
 extern crate lalrpop;
 
 fn main() {
+    // FIXME: Ensure that SDL2.dll is placed when this is used
+    // println!("cargo:rerun-if-changed=src/parse/parser.lalrpop");
+
     // Link SDL2 library
     let sdl2_path = r"C:/Development/SDL2/lib/x64";
     println!(r"cargo:rustc-link-search={}", sdl2_path);

@@ -1,6 +1,9 @@
 **The following items are not yet implemented**
 
 ## Other
+### Multiple Files
+- Allow importing functions/structs from other files
+- Consider a module system and namespacing
 ### Empty Structs
 - GLSL does not allow structs without any fields
   - Could get around this by adding a dummy field when parsing the .sdf file
@@ -31,5 +34,6 @@
 - Scenes
 
 ## **Runtime**
-- User-declared uniforms
+- Access to user-declared uniforms
 - Console
+  - Allow users to peek/set uniforms via the console

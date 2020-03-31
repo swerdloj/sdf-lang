@@ -1,3 +1,7 @@
+fn sd_plane(point: vec3, normal: vec3) -> float {
+    return dot(point, normalize(normal));
+}
+
 fn sd_sphere(point: vec3, radius: float) -> float {
     return length(point) - radius;
 }
@@ -9,7 +13,7 @@ fn sd_box(point: vec3, dimensions: vec3) -> float {
 struct Camera {
     position: vec3 = vec3(0., 4., -5.),
     lookat: vec3 = vec3(0.),
-    zoom: float = 2.,
+    zoom: float = 1.5,
 }
 
 impl Camera {
@@ -25,32 +29,39 @@ impl Camera {
 fn map(point: vec3) -> float {
     let dist = 1000.0;
 
-    let sphere = sd_sphere(point - vec3(-1, 0., 0.), 0.5);
+    let ground_plane = sd_plane(point - vec3(0., -1., 0.), vec3(0., 1., 0.));
+    
+    dist = min(dist, ground_plane);
+
+ 
+    let sphere = sd_sphere(point - vec3(-1., 0., 0.), 0.5);
     sphere -= sin(point.x*3. + time*2.)*0.15;
+   
+    dist = min(dist, sphere*0.8);
+   
     
     let box = sd_box(point - vec3(1., 0., 0.), vec3(0.4));
     
-    dist = min(sphere, box);
+    dist = min(dist, box);
+
 
     return dist;
 }
 
+// From iq's usual implementation
 fn get_normal(point: vec3) -> vec3 {
-    let epsilon = vec2(0.001, 0.);
-    let dist = map(point);
+    let epsilon = vec2(1., -1.) * 0.5773*0.0005;
 
-    let normal = dist - vec3(
-        map(point - epsilon.xyy),
-        map(point - epsilon.yxy),
-        map(point - epsilon.yyx)
-    );
-
-    return normalize(normal);
+    return normalize(
+        epsilon.xyy * map( point + epsilon.xyy ) +
+        epsilon.yyx * map( point + epsilon.yyx ) +
+        epsilon.yxy * map( point + epsilon.yxy ) +
+        epsilon.xxx * map( point + epsilon.xxx ) );
 }
 
 fn march(ray_origin: vec3, ray_direction: vec3) -> float {
     let max_steps = 100;
-    let max_distance = 70;
+    let max_distance = 70.;
     let surface_distance = 0.001;
 
     let distance = 0.;
@@ -84,30 +95,60 @@ fn get_diffused_light(point: vec3, light_pos: vec3) -> float {
     return diffused_light;
 }
 
-fn main() {
-    // [-1, 1], then scale x to aspect ratio
-    let uv = (gl_FragCoord.xy / window_dimensions - 0.5) * 2.;
-    uv.x *= window_dimensions.x / window_dimensions.y;
-
+fn render(ray_origin: vec3, ray_direction: vec3) -> vec3 {
     let color = vec3(0.);
 
-    let camera: Camera {
-        position: vec3(0., 0., -3.),
-    };
-    let ray_direction = camera.ray_direction(uv);
+    let dist = march(ray_origin, ray_direction);
+    let position = ray_origin + ray_direction * dist;
 
-    let dist = march(camera.position, ray_direction);
-    let position = camera.position + ray_direction * dist;
-
-    let light = get_diffused_light(position, vec3(5, 1., -5.));
+    let light = get_diffused_light(position, vec3(5, 2., -5.));
     color = vec3(light);
 
-    // fog
+    // Fog
     color = mix(color, vec3(0.1, 0.1, 0.2), 1. - exp(-0.001 * dist * dist));
 
-    // TODO: Why does using sqrt or 0.4545 give banding? Something to do with fog
-    // color = sqrt(color);
-    color = pow(color, vec3(0.45));
+    // Gamma
+    color = pow(color, vec3(0.4545));
+
+    return color;
+}
+
+// Render with specified antialiasing amount
+fn render_AA(camera: Camera, AA: int) -> vec3 {
+    let total = vec3(0.);
+
+    for m in 0 .. AA {
+    for n in 0 .. AA {
+        let o = vec2(m, n) / AA as float - 0.5;
+        let p = (-window_dimensions + 2.*(gl_FragCoord.xy + o)) / window_dimensions.y;
+
+        total += render(camera.position, camera.ray_direction(p));
+    }}
+    total /= (AA * AA) as float;
+
+    return total;
+}
+
+fn main() {
+    let camera: Camera {
+        position: vec3(sin(time*0.3)*2., 1., -3.),
+    };
+
+    let color: vec3;
+
+    let use_AA = true;
+
+    if use_AA {
+        color = render_AA(camera, 2);
+    } else {   
+        // [-1, 1], then scale x to aspect ratio
+        let uv = (gl_FragCoord.xy / window_dimensions - 0.5) * 2.;
+        uv.x *= window_dimensions.x / window_dimensions.y;
+
+        let ray_direction = camera.ray_direction(uv);
+        color = render(camera.position, ray_direction);
+    }
+
     
     out_color = vec4(color, 1.);
 }

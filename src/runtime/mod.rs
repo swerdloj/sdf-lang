@@ -1,10 +1,13 @@
 extern crate sdl2;
 extern crate gl;
 
-use gl::types::*;
 
 pub mod application;
 pub mod opengl;
+pub mod timing;
+
+
+use gl::types::*;
 
 use crate::parse;
 

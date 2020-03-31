@@ -147,7 +147,7 @@ Statement: ast::Statement = {
     LetStatement => <>,
     
     // TODO: Type check with owning function
-    "return" <expr:(Expression)?> ";" => {
+    "return" <expr:(SpannedExpression)?> ";" => {
         ast::Statement::Return {
             expression: expr,
         }
@@ -159,11 +159,10 @@ Statement: ast::Statement = {
 
     WhileLoop => <>,
 
-    <LoopControl> ";" => <>,
-
-    // <SpannedExpression> ";" => ast::Statement::Expression(<>),
+    <l:@L> "continue" <r:@R> ";" => ast::Statement::Continue((l, r)),
+    <l:@L> "break" <r:@R> ";" => ast::Statement::Break((l, r)),
     
-    // FIXME: The above won't work for some reason
+    // FIXME: Can't put a SpannedExpression here for some reason
     <l:@L> <expr:Expression> <r:@R> ";" => ast::Statement::Expression {
         expression: expr,
         span: (l, r),
@@ -175,15 +174,9 @@ Statement: ast::Statement = {
     },
 }
 
-#[inline]
-LoopControl: ast::Statement = {
-    "continue" => ast::Statement::Continue,
-    "break" => ast::Statement::Break,
-}
-
 // TODO: Allow expressions to define the range
 ForLoop: ast::Statement = {
-    "for" <id:Ident> "in" <from:Expression> ".." <to:Expression> <block:StatementBlock> => {
+    "for" <id:Ident> "in" <from:SpannedExpression> ".." <to:SpannedExpression> <block:StatementBlock> => {
         ast::Statement::For {
             loop_var: id,
             from,
@@ -194,7 +187,7 @@ ForLoop: ast::Statement = {
 }
 
 WhileLoop: ast::Statement = {
-    "while" <cond:Expression> <statements:StatementBlock> => {
+    "while" <cond:SpannedExpression> <statements:StatementBlock> => {
         ast::Statement::While {
             condition: cond,
             block: statements,
@@ -251,9 +244,9 @@ LetStatement: ast::Statement = {
     },
 }
 
-ConstructorArgs: Vec<(String, ast::Expression)> = {
-    <multi:(<Ident> ":" <Expression> ",")*>
-    <single:(<Ident> ":" <Expression>)?> => {
+ConstructorArgs: Vec<(String, ast::SpannedExpression)> = {
+    <multi:(<Ident> ":" <SpannedExpression> ",")*>
+    <single:(<Ident> ":" <SpannedExpression>)?> => {
         let mut args = multi;
         
         if let Some(arg) = single {

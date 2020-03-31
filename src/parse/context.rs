@@ -20,12 +20,24 @@ struct FunctionSignature {
     return_type: String,
 }
 
+// TODO: Refactor type system to be like this
+#[derive(PartialEq, Debug)]
+pub enum ScopeType {
+    Global,
+    Function {
+        return_type: String,
+    },
+    If,
+    Loop,
+    Impl,
+}
+
 pub struct Scope {
     // scope -> (name -> type)
     scopes: HashMap<usize, HashMap<String, String>>,
 
     // "global", "loop", "if", "function", "scene", etc.
-    scope_variants: Vec<String>,
+    scope_variants: Vec<ScopeType>,
 
     // 0 is global scope
     current: usize,
@@ -39,22 +51,32 @@ impl Scope {
 
         Scope {
             scopes,
-            scope_variants: vec!["global".to_owned()],
+            scope_variants: vec![ScopeType::Global],
             current: 0,
         }
     }
 
     pub fn is_within_loop(&self) -> bool {
-        self.scope_variants.contains(&String::from("loop"))
+        self.scope_variants.contains(&ScopeType::Loop)
     }
 
-    pub fn current_kind(&self) -> &String {
+    pub fn expected_return_type(&self) -> Result<String, String> {
+        for scope in &self.scope_variants {
+            if let ScopeType::Function {return_type: t} = scope {
+                return Ok(t.clone());
+            }
+        }
+
+        Err(format!("Unexpected return statement outside of function"))
+    }
+
+    pub fn current_kind(&self) -> &ScopeType {
         self.scope_variants.last().unwrap()
     }
 
-    pub fn push_scope(&mut self, kind: &str) {
+    pub fn push_scope(&mut self, kind: ScopeType) {
         self.current += 1;
-        self.scope_variants.push(kind.to_owned());
+        self.scope_variants.push(kind);
         self.scopes.insert(self.current, HashMap::new());
     }
 
@@ -270,11 +292,11 @@ impl Context {
     }
 
     /// Order constructor arguments and place defaults where needed
-    pub fn generate_constructor(&self, ty: &str, fields: Vec<(String, ast::Expression)>) -> Result<Vec<(String, ast::Expression)>, String> {
+    pub fn generate_constructor(&self, ty: &str, fields: Vec<(String, ast::SpannedExpression)>) -> Result<Vec<(String, ast::SpannedExpression)>, String> {
         // Existance is already guarenteed, so can just unwrap()
         let signature = self.structs.get(ty).unwrap();
         
-        let mut constructor: Vec<(String, ast::Expression)> = Vec::new();
+        let mut constructor: Vec<(String, ast::SpannedExpression)> = Vec::new();
         
         let mut supplied = HashMap::new();
         for (field_name, expr) in fields {
@@ -296,15 +318,16 @@ impl Context {
         for (field_name, field_type, default) in &signature.fields {
             if let Some(user_supplied) = supplied.get(field_name) {
                 // Ensure types are compatible
-                if !castable(&self.expression_type(user_supplied)?, field_type)? {
-                    return Err(format!("Error: The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(user_supplied)?));
+                if !castable(&self.expression_type(&user_supplied.expression)?, field_type)? {
+                    return Err(format!("Error: The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(&user_supplied.expression)?));
                 }
 
                 constructor.push((field_name.clone(), user_supplied.clone()));
             } else {
                 // Use default
                 if let Some(def) = default {
-                    constructor.push((field_name.clone(), def.clone()));
+                    // Default span will not be checked again
+                    constructor.push((field_name.clone(), ast::SpannedExpression {expression: def.clone(), span: (0, 0)}));
                 } else {
                     return Err(format!("Error: The constructor for '{}' has no default for field '{}', but no value was supplied.", ty, field_name.clone()));
                 }
