@@ -69,7 +69,8 @@ impl Application {
             // Update
             for event in event_pump.poll_iter() {
                 match event {
-                    Event::Quit { .. } => {
+                    Event::KeyDown { keycode: Some(Keycode::F12), .. }
+                    | Event::Quit { .. } => {
                         crate::exit!("Quitting...");
                     }
 

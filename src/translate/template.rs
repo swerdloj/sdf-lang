@@ -338,6 +338,33 @@ pub fn translate_expression(expr: &Expression) -> String {
             glsl.push_str(&translate_expression(rhs));
         }
 
+        Expression::FunctionApply(apply) => {
+            glsl.push_str(&format!("{}(", apply.name));
+
+            let mut current = 0;
+            let mut parenthesis = 0;
+            for expr in &apply.parameters {
+                
+                if apply.parameters.len() - current <= apply.func_parameters {
+                    glsl.push_str(&format!("{}, ", translate_expression(expr)));
+                } else {
+                    glsl.push_str(&format!("{}, {}(", translate_expression(expr), apply.name));
+                    parenthesis += 1;
+                }
+
+                current += 1;
+            }
+
+            // Remove trailing ", "
+            glsl.pop();
+            glsl.pop();
+
+            // Close the opened parenthesis
+            for _ in 0..=parenthesis {
+                glsl.push(')');
+            }
+        }
+
         Expression::FunctionCall(call) => {
             let mut params = String::new();
             for subexpr in &call.parameters {

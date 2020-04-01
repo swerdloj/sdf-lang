@@ -364,6 +364,44 @@ impl Context {
         }
     }
 
+    // TODO: Force 2-parameter functions only (for sanity/feasability)
+    // TODO: Allow builtin functions (needs overload check, etc.)
+    // TODO: Do not allow vec constructors to pass throug here
+    pub fn check_function_apply(&self, name: &str, passed_param_types: Vec<String>) -> Result<(usize, String), String> {
+        if let Some(signature) = self.functions.get(name) {   
+            if signature.parameters.len() == 0 {
+                return Err(format!("The function '{}' does not accept any parameters", name));
+            } else if signature.return_type == "void" {
+                return Err(format!("The function '{}' does not return anything (required for '<-' syntax)", name));
+            }
+
+            if passed_param_types.len() < signature.parameters.len() {
+                return Err(format!("The function '{}' accepts {} parameters, but only {} were given (minimum of {} needed for '<-' syntax)",
+                                    name, signature.parameters.len(), passed_param_types.len(), signature.parameters.len()));
+            }
+
+            let expected_type = &signature.parameters[0].1;
+            if signature.return_type != *expected_type {
+                return Err(format!("The function '{}' returns a different type from what it accepts (must be same types for '<-' syntax)", name));
+            }
+
+            for (_name, ty) in &signature.parameters {
+                if ty != expected_type {
+                    return Err(format!("The function '{}' accepts paremters of different types (must be same types for '<-' syntax)", name));
+                }
+            }
+            for ty in &passed_param_types {
+                if ty != expected_type {
+                    return Err(format!("The application of function '{}' requires parameters of type '{}', but got type '{}'", name, expected_type, ty));
+                }
+            }
+
+            Ok( (signature.parameters.len(), signature.return_type.clone()) )
+        } else {
+            Err(format!("The function '{}' does not exist", name))
+        }
+    }
+
     /// Validates a function call, returning the function's type.
     /// Constructs vector types similarly.
     pub fn check_function_call(&self, name: &str, passed_param_types: Vec<String>) -> Result<String, String> {
@@ -569,6 +607,10 @@ impl Context {
 
             ast::Expression::Unary {ty, ..} => {
                 ty.clone()
+            }
+
+            ast::Expression::FunctionApply(apply) => {
+                apply.ty.clone()
             }
 
             ast::Expression::FunctionCall(call) => {

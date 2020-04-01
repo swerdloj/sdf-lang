@@ -26,26 +26,22 @@ impl Camera {
     }
 }
 
+// FIXME: Temporary hack until '<-' syntax works with builtin functions
+fn min2(f1: float, f2: float) -> float {
+    return min(f1, f2);
+}
+
 fn map(point: vec3) -> float {
-    let dist = 1000.0;
-
     let ground_plane = sd_plane(point - vec3(0., -1., 0.), vec3(0., 1., 0.));
-    
-    dist = min(dist, ground_plane);
-
  
     let sphere = sd_sphere(point - vec3(-1., 0., 0.), 0.5);
     sphere -= sin(point.x*3. + time*2.)*0.15;
-   
-    dist = min(dist, sphere*0.8);
-   
+    sphere *= 0.9;   
     
     let box = sd_box(point - vec3(1., 0., 0.), vec3(0.4));
-    
-    dist = min(dist, box);
 
 
-    return dist;
+    return min2 <- (ground_plane, sphere, box);
 }
 
 // From iq's usual implementation
@@ -117,12 +113,12 @@ fn render(ray_origin: vec3, ray_direction: vec3) -> vec3 {
 fn render_AA(camera: Camera, AA: int) -> vec3 {
     let total = vec3(0.);
 
-    for m in 0 .. AA {
-    for n in 0 .. AA {
-        let o = vec2(m, n) / AA as float - 0.5;
-        let p = (-window_dimensions + 2.*(gl_FragCoord.xy + o)) / window_dimensions.y;
+    for x in 0 .. AA {
+    for y in 0 .. AA {
+        let offset = vec2(x, y) / AA as float - 0.5;
+        let point = (-window_dimensions + 2.*(gl_FragCoord.xy + offset)) / window_dimensions.y;
 
-        total += render(camera.position, camera.ray_direction(p));
+        total += render(camera.position, camera.ray_direction(point));
     }}
     total /= (AA * AA) as float;
 

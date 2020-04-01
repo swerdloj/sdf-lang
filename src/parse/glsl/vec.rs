@@ -4,8 +4,8 @@ use super::castable;
 
 /// Returns whether a function is actually a vec constructor.
 /// Can also be used to check if a type is a vec type
-pub fn is_vec_constructor_or_type(fn_name: &str) -> bool {
-    match fn_name {
+pub fn is_vec_constructor_or_type(name: &str) -> bool {
+    match name {
         "bvec2" | "bvec3" | "bvec4" |
         "ivec2" | "ivec3" | "ivec4" |
         "uvec2" | "uvec3" | "uvec4" |

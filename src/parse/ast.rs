@@ -58,6 +58,7 @@ pub enum Expression {
         rhs: Box<Expression>,
         ty: String,
     },
+    FunctionApply(FunctionApply),
     FunctionCall(FunctionCall),
     Member(Member),
     If {
@@ -67,6 +68,14 @@ pub enum Expression {
         else_if_block: Option<Box<Expression>>,
         ty: String,
     },
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionApply {
+    pub name: String,
+    pub func_parameters: usize,
+    pub parameters: Vec<Expression>,
+    pub ty: String,
 }
 
 #[derive(Debug, Clone)]

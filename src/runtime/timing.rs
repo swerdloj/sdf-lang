@@ -16,7 +16,7 @@ pub struct Timer {
     pub paused: bool,
 
     // TODO: Implement this
-    // average_fps: f32,
+    // average_delta_time: f32,
     
     timer: sdl2::TimerSubsystem,
 }

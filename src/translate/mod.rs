@@ -366,6 +366,20 @@ fn validate_expression(expression: &mut Expression, context: &mut Context, input
             validate_expression(expr.as_mut(), context, input)?;
         }
 
+        // TODO: This only seems plausable if the function accepts exactly 2 parameters
+        Expression::FunctionApply(apply) => {
+            let mut param_types = Vec::new();
+            for expr in apply.parameters.iter_mut() {
+                validate_expression(expr, context, input)?;
+                param_types.push(context.expression_type(expr)?);
+            }
+            
+            let (num_params, return_type) = context.check_function_apply(&apply.name, param_types)?;
+
+            apply.func_parameters = num_params;
+            apply.ty = return_type;
+        }
+
         Expression::FunctionCall(call) => {
             let mut param_types = Vec::new();
             for expr in call.parameters.iter_mut() {

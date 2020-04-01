@@ -270,6 +270,23 @@ Expression: ast::Expression = {
     BooleanExpr => <>,
 }
 
+FunctionApply: ast::FunctionApply = {
+    <name:Ident> "<-" "(" <params_multi:(<Expression> ",")*> 
+                     <param_final:(<Expression>)?> ")" => {
+        let mut params = params_multi;
+        if let Some(param) = param_final {
+            params.push(param);
+        }
+
+        ast::FunctionApply {
+            name,
+            func_parameters: 0usize,
+            parameters: params,
+            ty: "temp".to_owned(),
+        }
+    },
+}
+
 // Treated same as identifier/literal
 FunctionCall: ast::FunctionCall = {
     <name:Ident> "(" <params_multi:(<Expression> ",")*>
@@ -285,7 +302,7 @@ FunctionCall: ast::FunctionCall = {
             parameters: params,
             ty: "temp".to_owned(),
         }
-    }
+    },
 }
 
 IfExpr: ast::Expression = {
@@ -406,6 +423,10 @@ BaseExpr: ast::Expression = {
 
     FunctionCall => {
         ast::Expression::FunctionCall(<>)
+    },
+
+    FunctionApply => {
+        ast::Expression::FunctionApply(<>)
     },
 
     "-" <BaseExpr> => {
