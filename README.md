@@ -4,11 +4,25 @@
 `.sdf` files are transpiled to GLSL for use with a raymarching renderer.
 
 ## Compiler
-- Run `sdf-lang` with the following arguments
+- Run `compiler` with the following arguments
   - `--help` display usage information
   - `--input` to specify the input file path
   - `--output` to specify the output file path
   - `--AST` to write the AST to a text file (if parsed without error)
+
+## Runtime
+Run `runtime PATH` where "PATH" is the relative path to the desired `.sdf` file. This will open a window and run the shader.
+
+Within the runtime, the following features are available:
+- Hot reloading
+  - Press *F5* to reload the current shader
+  - Errors in the `.sdf` code will appear in the console
+- Timing
+  - Time is passed to the shader's `time` uniform in seconds
+  - Press *Spacebar* to pause/unpause time
+- Window Sizing
+  - The window size is passed to the shader's `window_dimensions` uniform
+  - Resizing the window will update this uniform
 
 ## Language
 sdf-lang has syntax inspired by Rust and is compiled to GLSL. The langauge may be extended to compile to various shader types in the future, but it currently targets fragment shaders exclusively.
@@ -27,6 +41,25 @@ Therefore, all code in a `.sdf` will be run **per-pixel** just like a typical fr
 TODO: in -> copy
       inout -> &mut
 
+### **Syntax**
+Syntax is nearly identical to Rust with a few changes/additions
+
+### The Apply Operator
+
+A *nestable* function can be applied to a collection of expressions using the *apply* operator like so:
+```Rust
+let mininum = min <- (a, b, c, d);
+```
+The apply operator will be translated as
+```glsl
+min(a, min(b, min(c, d)))
+```
+In order to use this operator, the applied function must be *nestable*, meaning it meets the following conditions:
+1. Accepts exactly **2** parameters of the same type
+2. Return type is the same as these 2 parameters
+
+This is useful in cases such as expressing the union of complex SDF types or taking the min/max of a collection of expressions.
+
 ### **Functions**
 Functions in sdf-lang are identical to Rust:
 ```Rust
@@ -39,29 +72,39 @@ Note that implicit returns are not supported by sdf-lang (no final semicolon).
 ### **Structs**
 Structs are somewhat similar to Rust, and are defined as follows:
 ```Rust
-struct struct_name {
-  field1: type1,
-  field2: type2 = default_value,
+struct StructName {
+    field1: type1,
+    field2: type2 = default_value,
 }
 ```
 Fields with default values do not require the user to specify them in a constructor. Fields without defaults *must* be initialized by the user.
 
 Constructors are structured as follows:
 ```Rust
-let variable: struct_name {
+let variable: StructName {
     field1: value1,
     // field2: override_default,  <-- This is optional because of the default value
 };
 ```
 Note that the constructor is **not** a method.
 
-TODO:
 Methods can be attached to structs like so:
 ```Rust
-impl struct_name {
-  fn ...
+impl StructName {
+    fn method(self) {
+        self.field = something;
+    }
+
+    fn method2(in self, param: some_type) -> some_type {
+        return self.field * param;
+    }
 }
 ```
+If unspecified, the input parameter `self` will be translated as `inout`. 
+
+In this case, `in self` is like Rust's `&self`, and `inout self` is like `&mut self`.
+
+Note that all methods must reference `self`.
 
 ### **Scenes**
 The purpose of sdf-lang is to construct signed distance fields. Scenes interact with a signed distance field's geometry.
@@ -70,9 +113,9 @@ Scenes are rendered via raymarching and therefore have access to the rays as the
 ```Rust
 scene scene_name {
     let cube: Box {
-      length: 1,
-      width: 1,
-      height: 1,
+        length: 1,
+        width: 1,
+        height: 1,
     };
 
     cube.xz *= rotate(time);
