@@ -31,6 +31,10 @@ pub fn translate_outs(outs: &HashSet<(String, String)>) -> String {
     glsl
 }
 
+pub fn translate_const(constant: &ConstDeclaration) -> String {
+    format!("const {} {} = {};\n\n", constant.ty, constant.ident, translate_expression(&constant.value.expression))
+}
+
 // Note that GLSL does not support struct defaults
 pub fn translate_structure(name: &str, fields: &Vec<(String, String, Option<Expression>)>) -> String {
     let mut glsl = String::new();

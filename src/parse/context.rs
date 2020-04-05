@@ -33,8 +33,8 @@ pub enum ScopeType {
 }
 
 pub struct Scope {
-    // scope -> (name -> type)
-    scopes: HashMap<usize, HashMap<String, String>>,
+    // scope -> (name -> (type, is_const))
+    scopes: HashMap<usize, HashMap<String, (String, bool)>>,
 
     // "global", "loop", "if", "function", "scene", etc.
     scope_variants: Vec<ScopeType>,
@@ -51,6 +51,7 @@ impl Scope {
 
         Scope {
             scopes,
+            // Initialize with the global scope active
             scope_variants: vec![ScopeType::Global],
             current: 0,
         }
@@ -87,9 +88,9 @@ impl Scope {
         self.current -= 1;
     }
 
-    fn add_var_to_scope(&mut self, name: String, ty: String) -> Result<(), String> {
-        if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), ty) {
-            Err(format!("Error: Variable '{}' already exists in the current scope", name))
+    fn add_var_to_scope(&mut self, name: String, ty: String, is_constant: bool) -> Result<(), String> {
+        if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), (ty, is_constant)) {
+            Err(format!("Variable '{}' already exists in the current scope", name))
         } else {   
             Ok(())
         }
@@ -107,8 +108,18 @@ impl Scope {
 
     pub fn var_type(&self, name: &str) -> Result<String, String> {
         for scope in 0..=self.current {
-            if let Some(ty) = self.scopes.get(&scope).unwrap().get(name) {
+            if let Some((ty, _is_const)) = self.scopes.get(&scope).unwrap().get(name) {
                 return Ok(ty.to_owned());
+            }
+        }
+
+        Err(format!("Unknown identifier '{}'", name))
+    }
+
+    pub fn is_var_constant(&self, name: &str) -> Result<bool, String> {
+        for scope in 0..=self.current {
+            if let Some((_ty, is_const)) = self.scopes.get(&scope).unwrap().get(name) {
+                return Ok(*is_const);
             }
         }
 
@@ -151,6 +162,8 @@ impl Context {
             "float", "double", "bool", "int", "uint", "sampler2D", "samplerCube",
             "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4", "bvec2", "bvec3", "bvec4",
             "dvec2", "dvec3", "dvec4", "uvec2", "uvec3", "uvec4"
+            //,"mat2", "mat3", "mat4", "mat2x2", "mat2x3", "mat2x4", "mat3x2", "mat3x3", "mat3x4",
+            //"may4x2", "mat4x3", "mat4x4"
         );
 
 
@@ -178,10 +191,10 @@ impl Context {
         // TODO: Most of this should be reserved for scenes? Or make it optional via directive
 
         let mut scopes = Scope::new();
-        scopes.add_var_to_scope("out_color".to_owned(), "vec4".to_owned()).unwrap();
-        scopes.add_var_to_scope("time".to_owned(), "float".to_owned()).unwrap();
-        scopes.add_var_to_scope("window_dimensions".to_owned(), "vec2".to_owned()).unwrap();
-        scopes.add_var_to_scope("gl_FragCoord".to_owned(), "vec4".to_owned()).unwrap();
+        scopes.add_var_to_scope( "out_color".to_owned(), "vec4".to_owned(), false          ).unwrap();
+        scopes.add_var_to_scope( "time".to_owned(), "float".to_owned(), false              ).unwrap();
+        scopes.add_var_to_scope( "window_dimensions".to_owned(), "vec2".to_owned(), false  ).unwrap();
+        scopes.add_var_to_scope( "gl_FragCoord".to_owned(), "vec4".to_owned(), false       ).unwrap();
 
         Context {
             functions,
@@ -193,12 +206,12 @@ impl Context {
         }
     }
 
-    pub fn add_var_to_scope(&mut self, name: String, ty: String) -> Result<(), String> {
+    pub fn add_var_to_scope(&mut self, name: String, ty: String, is_constant: bool) -> Result<(), String> {
         if self.is_primitive(&name) {
-            return Err(format!("Error: Cannot name variable as primitive type '{}'", name));
+            return Err(format!("Cannot name variable as primitive type '{}'", name));
         }
 
-        self.scopes.add_var_to_scope(name, ty)?;
+        self.scopes.add_var_to_scope(name, ty, is_constant)?;
 
         Ok(())
     }
@@ -209,7 +222,7 @@ impl Context {
 
     pub fn declare_uniform(&mut self, name: String, ty: String /*, initial_value: ?? */) -> Result<(), String> {
         if !self.uniforms.insert((name.clone(), ty)) {
-            Err(format!("Error: Uniform '{}' was already declared", &name))
+            Err(format!("Uniform '{}' was already declared", &name))
         } else {
             Ok(())
         }
@@ -231,7 +244,7 @@ impl Context {
     
     pub fn declare_out(&mut self, name: String, ty: String /*, initial_value: ?? */) -> Result<(), String> {
         if !self.outs.insert((name.clone(), ty)) {
-            Err(format!("Error: Out '{}' was already declared", &name))
+            Err(format!("Out '{}' was already declared", &name))
         } else {
             Ok(())
         }
@@ -243,7 +256,7 @@ impl Context {
 
     pub fn declare_struct(&mut self, name: String, passed_fields: Vec<(String, String, Option<ast::Expression>)>) -> Result<(), String> {       
         if self.is_primitive(&name) {
-            return Err(format!("Error: Cannot name struct '{}' the same as a primitive type", &name));
+            return Err(format!("Cannot name struct '{}' the same as a primitive type", &name));
         }
 
         let mut fields = Vec::new();
@@ -258,7 +271,7 @@ impl Context {
         };
 
         if let Some(old) = self.structs.insert(name, signature) {
-            Err(format!("Error: Struct '{}' was declared multiple times", old.name))
+            Err(format!("Struct '{}' was declared multiple times", old.name))
         } else {
             Ok(())
         }
@@ -269,10 +282,10 @@ impl Context {
             if !signature.has_implementation {
                 signature.has_implementation = true;
             } else {
-                return Err(format!("Error: Struct '{}' already has an implementation.", struct_name));
+                return Err(format!("Struct '{}' already has an implementation.", struct_name));
             }
         } else {
-            return Err(format!("Error: No such struct exists, '{}'", struct_name));
+            return Err(format!("No such struct exists, '{}'", struct_name));
         }
 
         Ok(())
@@ -285,9 +298,9 @@ impl Context {
                     return Ok(ty.to_owned());
                 }
             }
-            Err(format!("Error: Struct '{}' does not have field '{}'", struct_name, field_name))
+            Err(format!("Struct '{}' does not have field '{}'", struct_name, field_name))
         } else {
-            Err(format!("Error: Type '{}' is not a struct or does not exist (tried accessing field '{}')", struct_name, field_name))
+            Err(format!("Type '{}' is not a struct or does not exist (tried accessing field '{}')", struct_name, field_name))
         }
     }
 
@@ -311,7 +324,7 @@ impl Context {
 
         for field_name in supplied.keys() {
             if !all_fields.contains(field_name) {
-                return Err(format!("Error: The struct '{}' has no field '{}'.", ty, field_name));
+                return Err(format!("The struct '{}' has no field '{}'.", ty, field_name));
             }
         }
 
@@ -319,7 +332,7 @@ impl Context {
             if let Some(user_supplied) = supplied.get(field_name) {
                 // Ensure types are compatible
                 if !castable(&self.expression_type(&user_supplied.expression)?, field_type)? {
-                    return Err(format!("Error: The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(&user_supplied.expression)?));
+                    return Err(format!("The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(&user_supplied.expression)?));
                 }
 
                 constructor.push((field_name.clone(), user_supplied.clone()));
@@ -329,7 +342,7 @@ impl Context {
                     // Default span will not be checked again
                     constructor.push((field_name.clone(), ast::SpannedExpression {expression: def.clone(), span: (0, 0)}));
                 } else {
-                    return Err(format!("Error: The constructor for '{}' has no default for field '{}', but no value was supplied.", ty, field_name.clone()));
+                    return Err(format!("The constructor for '{}' has no default for field '{}', but no value was supplied.", ty, field_name.clone()));
                 }
             }
         }
@@ -339,11 +352,11 @@ impl Context {
 
     pub fn declare_function(&mut self, name: String, declared_parameters: Vec<(Option<ast::FuncParamQualifier>, String, String)>, ty: String) -> Result<(), String> {
         if glsl::functions::is_builtin(&name) {
-            return Err(format!("Error: A builtin function, '{}' exists with the same name", &name));
+            return Err(format!("A builtin function, '{}' exists with the same name", &name));
         }
         
         if self.is_primitive(&name) {
-            return Err(format!("Error: Cannot name function as primitive type '{}'", name));
+            return Err(format!("Cannot name function as primitive type '{}'", name));
         }
 
         let mut parameters = Vec::new();
@@ -358,7 +371,7 @@ impl Context {
         };
         
         if let Some(old) = self.functions.insert(name, signature) {
-            Err(format!("Error: Function '{}' was declared multiple times", old.name))
+            Err(format!("Function '{}' was declared multiple times", old.name))
         } else {
             Ok(())
         }
@@ -368,6 +381,11 @@ impl Context {
     // TODO: Allow builtin functions (needs overload check, etc.)
     // TODO: Do not allow vec constructors to pass throug here
     pub fn check_function_apply(&self, name: &str, passed_param_types: Vec<String>) -> Result<(usize, String), String> {
+        if glsl::functions::is_builtin(name) {
+            let ty = glsl::functions::can_arrow(name, &passed_param_types)?;
+            return Ok((2, ty.clone()));
+        }
+        
         if let Some(signature) = self.functions.get(name) {   
             if signature.parameters.len() == 0 {
                 return Err(format!("The function '{}' does not accept any parameters", name));
@@ -476,7 +494,7 @@ impl Context {
                         if v == r {
                             v
                         } else {
-                            return Err(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            return Err(format!("Cannot add type '{}' to type '{}'", r, v));
                         }
                     }
                     // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
@@ -490,7 +508,7 @@ impl Context {
                         if v == r {
                             v
                         } else {
-                            return Err(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            return Err(format!("Cannot add type '{}' to type '{}'", r, v));
                         }
                     }
                     // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
@@ -504,7 +522,7 @@ impl Context {
                         if v == r {
                             v
                         } else {
-                            return Err(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            return Err(format!("Cannot add type '{}' to type '{}'", r, v));
                         }
                     }
                     // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
@@ -518,7 +536,7 @@ impl Context {
                         if v == r {
                             v
                         } else {
-                            return Err(format!("Error: Cannot add type '{}' to type '{}'", r, v));
+                            return Err(format!("Cannot add type '{}' to type '{}'", r, v));
                         }
                     }
                     // _ => panic!(format!("Vector type '{}' must be left of added type '{}'", left_type, right_type))
@@ -564,7 +582,7 @@ impl Context {
         if self.primitive_types.contains(type_name) || self.structs.contains_key(type_name) {
             Ok(type_name.to_owned())
         } else {   
-            Err(format!("Error: Unknown or undeclared type '{}'", type_name))
+            Err(format!("Unknown or undeclared type '{}'", type_name))
         }
     }
 

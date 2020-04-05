@@ -1,3 +1,8 @@
+const MAX_STEPS:        int = 100;
+const MAX_DISTANCE:     float = 70.;
+const SURFACE_DISTANCE: float = 0.001;
+
+
 fn sd_plane(point: vec3, normal: vec3) -> float {
     return dot(point, normalize(normal));
 }
@@ -26,22 +31,17 @@ impl Camera {
     }
 }
 
-// FIXME: Temporary hack until '<-' syntax works with builtin functions
-fn min2(f1: float, f2: float) -> float {
-    return min(f1, f2);
-}
-
 fn map(point: vec3) -> float {
     let ground_plane = sd_plane(point - vec3(0., 0., 0.), vec3(0., 1., 0.));
  
     let sphere = sd_sphere(point - vec3(-1., 0.6, 0.), 0.5);
     sphere -= sin(point.x*3. + time*2.)*0.15;
-    sphere *= 0.9;   
+    sphere *= 0.9;
     
     let box = sd_box(point - vec3(1., 0.5, 0.), vec3(0.4));
 
 
-    return min2 <- (ground_plane, sphere, box);
+    return min <- (ground_plane, sphere, box);
 }
 
 // From iq's usual implementation
@@ -56,18 +56,14 @@ fn get_normal(point: vec3) -> vec3 {
 }
 
 fn march(ray_origin: vec3, ray_direction: vec3) -> float {
-    let max_steps = 100;
-    let max_distance = 70.;
-    let surface_distance = 0.001;
-
     let distance = 0.;
 
-    for i in 0 .. max_steps {
+    for i in 0 .. MAX_STEPS {
         let current_position = ray_origin + ray_direction * distance;
         let scene_distance = map(current_position);
         distance += scene_distance;
 
-        if (distance > max_distance) || (abs(scene_distance) < surface_distance) {
+        if (distance > MAX_DISTANCE) || (abs(scene_distance) < SURFACE_DISTANCE) {
             break;
         }
     }
@@ -111,8 +107,8 @@ fn ambient_occlusion2(point: vec3, normal: vec3) -> float {
 // https://www.shadertoy.com/view/WdyXRD
 fn approximate_soft_shadow(point: vec3, light_direction: vec3, mint: float, maxt: float, light_size: float) -> float {
     let t = mint;
-    let res = 1.0;
 
+    let res = 1.;
     for i in 0 .. 256 {
         let dist = map(point + t*light_direction);
         res = min(res, dist / (light_size*t));
@@ -132,7 +128,7 @@ fn get_diffused_light(point: vec3, light_pos: vec3, normal: vec3) -> float {
     let diffused_light = dot(normal, light_direction);
     diffused_light = clamp(diffused_light, 0., 1.);
 
-    let dist = march(point + normal*0.001*2., light_direction);
+    let dist = march(point + normal*SURFACE_DISTANCE*2., light_direction);
 
     // Hard shadows
     // if dist < length(light_pos - point) {
@@ -152,10 +148,10 @@ fn render(ray_origin: vec3, ray_direction: vec3) -> vec3 {
 
     let light = get_diffused_light(position, vec3(5, 4., -5.), normal);
     color = vec3(light);
-    color *= approximate_soft_shadow(position, normalize(vec3(5, 4., -5.)), 0.01, 3., 0.2);
+    color *= approximate_soft_shadow(position, normalize(vec3(5, 4., -5.)), 0.01, 3., 0.3);
 
     // Fake fill light (temporary)
-    color += 0.1;
+    color += 0.04;
 
     color *= ambient_occlusion2(position, normal);
 
@@ -169,7 +165,7 @@ fn render(ray_origin: vec3, ray_direction: vec3) -> vec3 {
     color = 1. - exp(-color);
     // Gain (helps add back some "punch" removed by tone-map)
     color = 1.8*color/(1.0+dot(color,vec3(0.333)));
-    // Gamma correction (sqrt color)
+    // Gamma correction (1/2.2)
     color = pow(color, vec3(0.4545));
     // Saturation/contrast
     color = smoothstep(0., 1., color);

@@ -15,6 +15,27 @@ pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, S
 
     for item in ast {
         match item {
+            Item::Constant(constant) => {
+                let span = input.evaluate_span(constant.value.span);
+
+                context.validate_type(&constant.ty).map_err(|e|
+                    format!("{}\n{}", span, e)
+                )?;
+                let rhs_type = &context.expression_type(&constant.value.expression).map_err(|e|
+                    format!("{}\n{}", span, e)
+                )?;
+                let castable = glsl::castable(rhs_type, &constant.ty).map_err(|e|
+                    format!("{}\n{}", span, e)
+                )?;
+
+                if castable {
+                    // This will be pushed to the global scope by default (no need to push/pop scope)
+                    context.add_var_to_scope(constant.ident.clone(), constant.ty.clone(), true)?;
+                } else {
+                    return Err(format!("{}\nCannot assign the constant '{}' of type '{}' to incompatible type '{}'", span, constant.ident, constant.ty, rhs_type));
+                }
+            }
+
             Item::Struct { name, fields } => {
                 context.declare_struct(name.clone(), fields.clone())?;
             }
@@ -27,7 +48,7 @@ pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, S
                 context.scopes.push_scope(ScopeType::Function{ return_type: return_type.clone() });
 
                 for (_param_qual, param_name, param_type) in parameters {
-                    context.add_var_to_scope(param_name.clone(), param_type.clone())?;
+                    context.add_var_to_scope(param_name.clone(), param_type.clone(), false)?;
                 }
 
                 for statement in statements {
@@ -64,7 +85,7 @@ pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, S
                             context.scopes.push_scope(ScopeType::Function{ return_type: return_type.clone() });
 
                             for (_qual, param_name, param_type) in parameters {
-                                context.add_var_to_scope(param_name.clone(), param_type.clone())?;
+                                context.add_var_to_scope(param_name.clone(), param_type.clone(), false)?;
                             }
 
                             for statement in statements {
@@ -181,11 +202,11 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
 
             *ty = checked_type.clone();
 
-            context.add_var_to_scope(ident.clone(), checked_type.unwrap())?;
+            context.add_var_to_scope(ident.clone(), checked_type.unwrap(), false)?;
         }
 
         Statement::LetConstructor { ident, constructor } => {
-            context.add_var_to_scope(ident.clone(), constructor.ty.clone())?;
+            context.add_var_to_scope(ident.clone(), constructor.ty.clone(), false)?;
             
             for (_ident, field) in &mut constructor.fields {
                 validate_expression(&mut field.expression, context, input)?;
@@ -210,6 +231,13 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
 
             match lhs {
                 IdentOrMember::Ident(ident) => {
+                    let is_constant = context.scopes.is_var_constant(ident).map_err(|e|
+                        format!("{}\n{}", input.evaluate_span(expression.span), e)
+                    )?;
+                    if is_constant {
+                        return Err(format!("{}\nCannot assign to an identifier declared as constant", input.evaluate_span(expression.span)));
+                    }
+
                     lhs_type = context.scopes.var_type(ident)?;
                 }
                 
@@ -234,7 +262,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
 
                             // TODO: Is this always true? Or are there cases where this would be valid?
                             IdentOrFunction::Function(func) => {
-                                return Err(format!("{}, Cannot assign to '.' operator with function call '{}'", span, func.name));
+                                return Err(format!("{}\nCannot assign to '.' operator with function call '{}'", span, func.name));
                             }
                         }
                     }
@@ -315,7 +343,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
             )?;
 
             if (from_type == "int" || from_type == "uint") && (to_type == "int" || to_type == "uint") {
-                context.add_var_to_scope(loop_var.clone(), "int".to_owned()).map_err(|e| 
+                context.add_var_to_scope(loop_var.clone(), "int".to_owned(), false).map_err(|e| 
                     // FIXME: Using "from.span" is a (viable) hack. Should use the for's span when implemented
                     format!("{}\n{}", input.evaluate_span(from.span), e)
                 )?;
@@ -584,6 +612,10 @@ pub fn translate(ast: &AST, context: &Context) -> String {
     for item in ast {
         // `Item`s always have global scopes
         match item {
+            Item::Constant(constant) => {
+                glsl.push_str(&translate_const(constant));
+            }
+
             Item::Struct { name, fields } => {
                 glsl.push_str(&translate_structure(name, fields));
             }

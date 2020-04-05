@@ -36,6 +36,20 @@ pub fn validate_function(function: &str, types: &Vec<String>) -> Result<String, 
     }
 }
 
+pub fn can_arrow(function: &str, types: &Vec<String>) -> Result<String, String> {
+    if function != "min" && function != "max" {
+        return Err(format!("Function '{}' cannot use '<-' syntax", function));
+    } else {
+        let expected_type = &types[0];
+        for ty in types {
+            if ty != expected_type {
+                return Err(format!("To use '<-' syntax with '{}', all types must be same (got {:?})", function, types));
+            }
+        }
+    }
+    validate_two_params(function, types)
+}
+
 // TODO: Matrices:  matrixCompMult,
 //       Bool Vecs: lessThan, lessThanEqual, greaterThan, greaterThanEqual, equal, notEqual, any, all, not
 

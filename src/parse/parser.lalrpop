@@ -32,6 +32,7 @@ pub AST: ast::AST = {
 // TODO: Allow global let statements
 // An AST is composed of Items
 Item: ast::Item = {
+    <c:ConstDeclaration> => ast::Item::Constant(c),
     Function => <>,
     Implementation => <>,
     Scene => <>,
@@ -216,16 +217,26 @@ IdentOrMember: ast::IdentOrMember = {
     <Ident> => ast::IdentOrMember::Ident(<>),
     <Member> => ast::IdentOrMember::Member(<>),
 }
-    
+
+ConstDeclaration: ast::ConstDeclaration = {
+    "const" <id:Ident> <ty: (":" <Ident>)> <expr: ("=" <SpannedExpression>)> ";" => {
+        ast::ConstDeclaration {
+            ident: id,
+            ty: ty,
+            value: expr,
+        }
+    }
+}
+
 LetStatement: ast::Statement = {
     <tag:("@" <Tag>)?>
-    "let" <id:Ident> <ty: (":" <Ident>)?> <expr:("=" <SpannedExpression>)?> ";" => { 
+    "let" <id:Ident> <ty: (":" <Ident>)?> <expr: ("=" <SpannedExpression>)?> ";" => { 
         if ty.is_none() && expr.is_none() {
             exit!(format!("Error: Standalone let statements like 'let {};' are not yet implemented", &id));
         }
         
         ast::Statement::Let {
-            ident: id.to_owned(),
+            ident: id,
             tag,
             ty,
             expression: expr,
@@ -235,9 +246,9 @@ LetStatement: ast::Statement = {
     // let identifier: type { param1: value1, param2: value2, ...};
     "let" <id:Ident> ":" <ty:Ident> "{" <fields:(ConstructorArgs)> "}" ";" => {        
         ast::Statement::LetConstructor {
-            ident: id.to_owned(),
+            ident: id,
             constructor: ast::Constructor {
-                ty: ty.clone(),
+                ty,
                 fields,
             },
         }

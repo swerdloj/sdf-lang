@@ -6,6 +6,7 @@ pub type Span = (usize, usize);
 
 #[derive(Debug)]
 pub enum Item {
+    Constant(ConstDeclaration),
     Function {
         name: String,
         parameters: Vec<(Option<FuncParamQualifier>, String, String)>,
@@ -124,6 +125,14 @@ pub enum AssignmentOperator {
     SubtractAssign,
     MultiplyAssign,
     DivideAssign,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConstDeclaration {
+    pub ident: String,
+    pub ty: String,
+    // TODO: When constant expressions are implemented, this must be constant-checked
+    pub value: SpannedExpression,
 }
 
 #[derive(Debug, Clone)]
