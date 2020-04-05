@@ -32,13 +32,13 @@ fn min2(f1: float, f2: float) -> float {
 }
 
 fn map(point: vec3) -> float {
-    let ground_plane = sd_plane(point - vec3(0., -1., 0.), vec3(0., 1., 0.));
+    let ground_plane = sd_plane(point - vec3(0., 0., 0.), vec3(0., 1., 0.));
  
-    let sphere = sd_sphere(point - vec3(-1., 0., 0.), 0.5);
+    let sphere = sd_sphere(point - vec3(-1., 0.6, 0.), 0.5);
     sphere -= sin(point.x*3. + time*2.)*0.15;
     sphere *= 0.9;   
     
-    let box = sd_box(point - vec3(1., 0., 0.), vec3(0.4));
+    let box = sd_box(point - vec3(1., 0.5, 0.), vec3(0.4));
 
 
     return min2 <- (ground_plane, sphere, box);
@@ -75,18 +75,69 @@ fn march(ray_origin: vec3, ray_direction: vec3) -> float {
     return distance;
 }
 
-fn get_diffused_light(point: vec3, light_pos: vec3) -> float {
+// iq's AO
+fn ambient_occlusion(point: vec3, normal: vec3) -> float {
+    let occlusion = 0.0;
+    let sca = 1.0;
+    for i in 0 .. 5 {
+        let hr = 0.001 + 0.15 * i as float / 4.0;
+        let dist = map(point + hr*normal);
+
+        occlusion += (hr - dist)*sca;
+        sca *= 0.95;
+    }
+
+    return clamp(1. - 1.5*occlusion, 0., 1.);
+}
+
+// shane's AO
+fn ambient_occlusion2(point: vec3, normal: vec3) -> float {
+    let occlusion = 0.;
+    // Darkness scaling (higher = darker shading)
+    let sca = 1.5;
+    // Width of the occlusion (higher = wider shadows)
+    let width = 0.25;
+    for i in 0 .. 5 {
+        let hr = (i + 1) as float * width/5.;        
+        let dist = map(point + hr*normal);
+        occlusion += (hr - dist)*sca;
+        sca *= 0.7;
+    }
+    
+    return clamp(1. - occlusion, 0., 1.);  
+}
+
+// FIXME: Shadows are off from source. Maybe lack of material causes this?
+// https://www.shadertoy.com/view/WdyXRD
+fn approximate_soft_shadow(point: vec3, light_direction: vec3, mint: float, maxt: float, light_size: float) -> float {
+    let t = mint;
+    let res = 1.0;
+
+    for i in 0 .. 256 {
+        let dist = map(point + t*light_direction);
+        res = min(res, dist / (light_size*t));
+        t += clamp(dist, 0.005, 0.5);
+        if res < -1. || t > maxt {
+            break;
+        }
+    }
+    res = max(res, -1.0);
+
+    return 0.25 * (1. + res) * (1. + res) * (2. - res);
+}
+
+fn get_diffused_light(point: vec3, light_pos: vec3, normal: vec3) -> float {
     let light_direction = normalize(light_pos - point);
-    let normal = get_normal(point);
 
     let diffused_light = dot(normal, light_direction);
     diffused_light = clamp(diffused_light, 0., 1.);
 
     let dist = march(point + normal*0.001*2., light_direction);
 
-    if dist < length(light_pos - point) {
-        diffused_light *= 0.1;
-    }
+    // Hard shadows
+    // if dist < length(light_pos - point) {
+    //     diffused_light *= 0.1;
+    // }
 
     return diffused_light;
 }
@@ -97,19 +148,36 @@ fn render(ray_origin: vec3, ray_direction: vec3) -> vec3 {
     let dist = march(ray_origin, ray_direction);
     let position = ray_origin + ray_direction * dist;
 
-    let light = get_diffused_light(position, vec3(5, 2., -5.));
+    let normal = get_normal(position);
+
+    let light = get_diffused_light(position, vec3(5, 4., -5.), normal);
     color = vec3(light);
+    color *= approximate_soft_shadow(position, normalize(vec3(5, 4., -5.)), 0.01, 3., 0.2);
+
+    // Fake fill light (temporary)
+    color += 0.1;
+
+    color *= ambient_occlusion2(position, normal);
 
     // Fog
-    color = mix(color, vec3(0.1, 0.1, 0.2), 1. - exp(-0.001 * dist * dist));
+    color = mix(color, vec3(0.08, 0.1, 0.2)*3., 1. - exp(-0.001 * dist * dist));
+    
 
-    // Gamma
+    // Post-processing
+
+    // Tone-map (remove blown out highlights)
+    color = 1. - exp(-color);
+    // Gain (helps add back some "punch" removed by tone-map)
+    color = 1.8*color/(1.0+dot(color,vec3(0.333)));
+    // Gamma correction (sqrt color)
     color = pow(color, vec3(0.4545));
+    // Saturation/contrast
+    color = smoothstep(0., 1., color);
 
     return color;
 }
 
-// Render with specified antialiasing amount
+// Render with specified antialiasing (MSAA) amount
 fn render_AA(camera: Camera, AA: int) -> vec3 {
     let total = vec3(0.);
 
@@ -127,7 +195,7 @@ fn render_AA(camera: Camera, AA: int) -> vec3 {
 
 fn main() {
     let camera: Camera {
-        position: vec3(sin(time*0.3)*2., 1., -3.),
+        position: vec3(sin(time*0.3)*3., 1., cos(time*0.3)*3.),
     };
 
     let color: vec3;
