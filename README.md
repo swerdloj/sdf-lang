@@ -38,11 +38,18 @@ Therefore, all code in a `.sdf` will be run **per-pixel** just like a typical fr
 - Scenes
 - (TODO:) Enums 
 
-TODO: in -> copy
-      inout -> &mut
 
 ### **Syntax**
 Syntax is nearly identical to Rust with a few changes/additions
+
+### Shader Type Declaration
+
+All shaders must declare their type on the **first line**:
+```Rust
+@VERTEX   // Allows gl_Position, gl_VertexID, etc.
+@FRAGMENT // Allows gl_FragCoord, out_color, etc.
+@COMPUTE  // ...
+``` 
 
 ### The Apply Operator
 
@@ -50,7 +57,7 @@ A *nestable* function can be applied to a collection of expressions using the *a
 ```Rust
 let mininum = min <- (a, b, c, d);
 ```
-The apply operator will be translated as
+In this case, the apply operator is equivalent to
 ```glsl
 min(a, min(b, min(c, d)))
 ```
@@ -61,9 +68,9 @@ In order to use this operator, the applied function must be *nestable*, meaning 
 This is useful in cases such as expressing the union of complex SDF types or taking the min/max of a collection of expressions.
 
 ### **Functions**
-Functions in sdf-lang are identical to Rust:
+Functions in sdf-lang are almost identical to Rust. Parameters may be qualified with `in`, `out`, or `inout`, functioning the same as in GLSL. If no qualifier is given, the default of `in` will be assigned.
 ```Rust
-fn some_function(field1: type1, field2: type2) -> optional_return_type {
+fn some_function(field1: type1, in field2: type2) -> optional_return_type {
     return field1 + field2;
 }
 ```
@@ -91,7 +98,7 @@ Note that the constructor is **not** a method.
 Methods can be attached to structs like so:
 ```Rust
 impl StructName {
-    fn method(self) {
+    fn method1(self) {
         self.field = something;
     }
 
@@ -100,13 +107,13 @@ impl StructName {
     }
 }
 ```
-If unspecified, the input parameter `self` will be translated as `inout`. 
+If unspecified, the parameter `self` will be treated as `inout`. 
 
 In this case, `in self` is like Rust's `&self`, and `inout self` is like `&mut self`.
 
 Note that all methods must reference `self`.
 
-### **Scenes**
+### **Scenes** -- UNIMPLEMENTED
 The purpose of sdf-lang is to construct signed distance fields. Scenes interact with a signed distance field's geometry.
 
 Scenes are rendered via raymarching and therefore have access to the rays as they are being cast:
@@ -137,7 +144,15 @@ Tags are denoted by the `@` symbol.
 The most common tag is `@uniform` which specifies that a variable will be modified via the CPU. All such variables are required to have their type specified with an initial value.
 ```Rust
 @uniform
-let x: int = 7;
+let time: int = 0;
 ```
 
-Furthermore, such `@uniform` variables are added to the global scope.
+The `@out` tag specifies that a variable will be an output of the shader
+```Rust
+@out
+let output_color: vec4 = vec4(0.);
+```
+
+Note that such tagged variables are added to the global scope (required by GLSL). This means that no two tagged variables may be declared with the same name.
+
+Furthermore, tagged variables are only accessable within their declared scope, meaning the `.sdf` file will not have any scope pollution.

@@ -11,7 +11,7 @@ use crate::parse::glsl;
 //
 // Note that nested items are translated recursively (for bottom-up type analysis like expressions)
 pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, String> {
-    let mut context = Context::new();
+    let mut context = Context::new(&input.shader_type);
 
     for item in ast {
         match item {

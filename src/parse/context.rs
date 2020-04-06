@@ -127,6 +127,12 @@ impl Scope {
     }
 }
 
+pub enum ShaderType {
+    Vertex,
+    Fragment,
+    Compute,
+}
+
 pub struct Context {
     /// Function name -> Function signature
     functions: HashMap<String, FunctionSignature>,
@@ -147,7 +153,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new() -> Self {
+    pub fn new(shader_type: &ShaderType) -> Self {
         macro_rules! declare_primitive_types {
             ( $( $x:expr ),+ ) => {{
                     let mut types = HashSet::new();
@@ -169,7 +175,7 @@ impl Context {
 
 
         // TODO: Allow different defaults based on shader type
-        // TODO: Allow shader-type declaration (like #FRAGMENT or #VERTEX)
+        // TODO: Allow shader-type declaration (like @FRAGMENT or @VERTEX)
 
 
 
@@ -179,22 +185,40 @@ impl Context {
 
         // TODO: HashSet does not save insertion order. This is probably not an issue, but look into it.
         let mut uniforms = HashSet::new();
-        uniforms.insert(("time".to_owned(), "float".to_owned()));
-        uniforms.insert(("window_dimensions".to_owned(), "vec2".to_owned()));
-        uniforms.insert(("mouse_position".to_owned(), "vec2".to_owned()));
-
-        // FIXME: This MUST be in out location 0 (must save this order)
         let mut outs = HashSet::new();
-        outs.insert(("out_color".to_owned(), "vec4".to_owned()));
+        // Note that this defaults to the global scope
+        let mut scopes = Scope::new();
 
+        // TODO: Finish this once arrays are implemented
+        // https://www.khronos.org/opengl/wiki/Built-in_Variable_(GLSL)
+        match shader_type {
+            ShaderType::Vertex => {
+                // TODO: This
+            }
+
+            ShaderType::Fragment => {
+                // FIXME: This MUST be in out location 0 (must save this particular location)
+                outs.insert(("out_color".to_owned(), "vec4".to_owned()));
+                scopes.add_var_to_scope( "out_color".to_owned(),    "vec4".to_owned(), false).unwrap();
+                scopes.add_var_to_scope( "gl_FragCoord".to_owned(), "vec4".to_owned(), true).unwrap();
+                
+                // TODO: Add the rest
+            }
+
+            ShaderType::Compute => {
+                // TODO: This
+            }
+        }
 
         // TODO: Most of this should be reserved for scenes? Or make it optional via directive
 
-        let mut scopes = Scope::new();
-        scopes.add_var_to_scope( "out_color".to_owned(), "vec4".to_owned(), false          ).unwrap();
+
+        uniforms.insert(("time".to_owned(), "float".to_owned()));
+        uniforms.insert(("window_dimensions".to_owned(), "vec2".to_owned()));
+        uniforms.insert(("mouse_position".to_owned(), "vec2".to_owned()));
+        
         scopes.add_var_to_scope( "time".to_owned(), "float".to_owned(), false              ).unwrap();
         scopes.add_var_to_scope( "window_dimensions".to_owned(), "vec2".to_owned(), false  ).unwrap();
-        scopes.add_var_to_scope( "gl_FragCoord".to_owned(), "vec4".to_owned(), false       ).unwrap();
 
         Context {
             functions,

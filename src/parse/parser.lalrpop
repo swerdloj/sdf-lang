@@ -13,6 +13,9 @@ match {
     // Ignore comments
     // from https://github.com/lalrpop/lalrpop/pull/509/commits/ee2f7060e99f902620ac4edeea5cfe3c3551f09c)
     r"\s*" => { },
+    // Skip the header
+    // TODO: This should not require an exact match (temporary solution)
+    r"(@FRAGMENT)|(@VERTEX)|(@COMPUTE)" => { },
     r"//[^\n\r]*[\n\r]*" => { },
     // TODO: Look at this regex; it may do more than I want/need 
     // FIXME: In-line comments don't work

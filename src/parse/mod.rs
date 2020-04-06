@@ -7,6 +7,7 @@ lalrpop_mod!(pub parser, "/parse/parser.rs");
 pub struct Input {
     pub path: std::path::PathBuf,
     pub text: String,
+    pub shader_type: context::ShaderType,
 }
 
 impl Input {
@@ -14,10 +15,36 @@ impl Input {
         let as_path = path.into();
         
         let text = std::fs::read_to_string(&as_path)?;
+
+        // TODO: Propogate errors somehow (instead of exit!)
+        // TODO: It would probably be much better to do this check in the parser,
+        //       then validate this from the AST (this also fixes above todo)
+        let shader_type = match text.lines().next() {
+            Some(text) => {
+                match text {
+                    "@FRAGMENT" => {
+                        context::ShaderType::Fragment
+                    }
+                    "@VERTEX" => {
+                        context::ShaderType::Vertex
+                    }
+                    "@COMPUTE" => {
+                        context::ShaderType::Compute
+                    }
+                    _ => {
+                        crate::exit!("TEMPORARY Error: Shader type not specified (must be exact match) as first line")
+                    }
+                }
+            }
+            None => {
+                crate::exit!("TEMPORARY Error: Empty shader")
+            }
+        };
         
         Ok(Self {
             path: as_path,
             text,
+            shader_type,
         })
     }
 
@@ -114,19 +141,4 @@ fn vec_to_string(vec: Vec<String>) -> String {
     string.pop();
 
     string
-}
-
-// TODO: Implement a test function that compiles a series of test files
-
-/// Simple parser test cases. Note that only full ASTs are generated
-/// 
-/// This is is to prevent lalrpop from generating more code than needed
-#[allow(unused)]
-#[cfg(test)]
-mod parser_test {
-    use crate::parse::parser;
-
-    fn test_input() {
-
-    }
 }

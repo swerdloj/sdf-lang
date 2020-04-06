@@ -35,8 +35,15 @@ impl Runtime {
     }
 
     // TODO: Consider having this return a result
+    // FIXME: Calling this function multiple times doubles memory usage once for no reason
+    //        but only if the shader changed (even though it is recompiled regardless).
+    //        I can't track it to a single object in this function, and this happens randomly.
     pub fn reload_shader(&mut self) {      
         let input = parse::Input::from_path(&self.sdf_path).unwrap();
+        if let crate::parse::context::ShaderType::Fragment = input.shader_type {} else {
+            println!("\nError: Shader was not declared as a fragment shader");
+            return;
+        }
         
         let mut ast = parse::parse(&input);
         if ast.is_err() {
@@ -49,7 +56,6 @@ impl Runtime {
         if context.is_err() {
             println!("\nA shader error prevented reloading: ");
             println!("{}\n", context.err().unwrap());
-            // context.map_err(|e| println!("{}\n", e));
             return;
         }
 

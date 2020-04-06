@@ -1,4 +1,6 @@
-const MAX_STEPS:        int = 100;
+@FRAGMENT
+
+const MAX_STEPS:        int   = 100;
 const MAX_DISTANCE:     float = 70.;
 const SURFACE_DISTANCE: float = 0.001;
 
@@ -148,7 +150,7 @@ fn render(ray_origin: vec3, ray_direction: vec3) -> vec3 {
 
     let light = get_diffused_light(position, vec3(5, 4., -5.), normal);
     color = vec3(light);
-    color *= approximate_soft_shadow(position, normalize(vec3(5, 4., -5.)), 0.01, 3., 0.3);
+    color *= approximate_soft_shadow(position, normalize(vec3(5, 4., -5.)), 0.01, 3., 0.1);
 
     // Fake fill light (temporary)
     color += 0.04;
