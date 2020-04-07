@@ -164,6 +164,7 @@ pub enum Statement {
     While {
         condition: SpannedExpression,
         block: Vec<Statement>,
+        do_while: bool,
     },
     Continue(Span),
     Break(Span),

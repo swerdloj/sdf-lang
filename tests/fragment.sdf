@@ -24,7 +24,7 @@ struct Camera {
 }
 
 impl Camera {
-    fn ray_direction(self, uv: vec2) -> vec3 {
+    fn ray_direction(in self, uv: vec2) -> vec3 {
         let forward = normalize(self.lookat - self.position);
         let right   = normalize(cross(vec3(0., 1., 0.), forward));
         let up      = cross(forward, right);
@@ -36,14 +36,16 @@ impl Camera {
 fn map(point: vec3) -> float {
     let ground_plane = sd_plane(point - vec3(0., 0., 0.), vec3(0., 1., 0.));
  
-    let sphere = sd_sphere(point - vec3(-1., 0.6, 0.), 0.5);
-    sphere -= sin(point.x*3. + time*2.)*0.15;
-    sphere *= 0.9;
+    let wavy_sphere = sd_sphere(point - vec3(-1., 0.6, 0.), 0.5);
+    wavy_sphere -= sin(point.x*3. + time*2.)*0.15;
+    wavy_sphere *= 0.9;
+
+    let sphere2 = sd_sphere(point - vec3(0., sin(time)*0.2+0.3, -0.3), 0.4);
     
     let box = sd_box(point - vec3(1., 0.5, 0.), vec3(0.4));
 
 
-    return min <- (ground_plane, sphere, box);
+    return min <- (ground_plane, wavy_sphere, box, sphere2);
 }
 
 // From iq's usual implementation
@@ -155,7 +157,7 @@ fn render(ray_origin: vec3, ray_direction: vec3) -> vec3 {
     // Fake fill light (temporary)
     color += 0.04;
 
-    color *= ambient_occlusion2(position, normal);
+    color *= ambient_occlusion(position, normal);
 
     // Fog
     color = mix(color, vec3(0.08, 0.1, 0.2)*3., 1. - exp(-0.001 * dist * dist));

@@ -1,6 +1,6 @@
 **The following items are not yet implemented**
 
-## Other
+## Language
 ### Multiple Files
 - Allow importing functions/structs from other files
 - Consider a module system and namespacing
@@ -9,10 +9,10 @@
   - Could get around this by adding a dummy field when parsing the .sdf file
 ### Enums
 - Implement enums for `match`
+### Default Function Parameter Values
+- Consider allowing defaults for function parameters like Python
 
 ## **Parser**
-### Error locations
-- Span via @L/R lalrpop bindings
 ### Types
 - `vec` type casting (same rules as normal types)
 - `mat` types
@@ -24,9 +24,8 @@
 - Constructors as expressions
 ### Statements
 - `for` loop  
-- `do while` loop
 ### Structs
-- member chaining
+- Member chaining
 
 ## **Translator**
 - Type inferrence beyond initial assignment

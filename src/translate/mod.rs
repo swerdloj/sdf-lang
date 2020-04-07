@@ -70,9 +70,17 @@ pub fn validate(ast: &mut AST, input: &crate::parse::Input) -> Result<Context, S
                     match function {
                         Item::Function { name, parameters, return_type, statements } => {
                             if parameters.len() > 0 {
-                                // TODO: If unspecified, "self" will be marked as "inout"
-                                //       Otherwise, don't force "inout"
-                                parameters[0] = (Some(FuncParamQualifier::InOut), "self".to_owned(), format!("{}", struct_name));
+                                let qualifier = if let Some(qual) = &parameters[0].0 {
+                                    qual.clone()
+                                } else {
+                                    FuncParamQualifier::InOut
+                                };
+
+                                if parameters[0].1 != "self" {
+                                    return Err(format!("Implementation function '{}.{}' requires 'self' as first parameter (found '{}')", struct_name, name, parameters[0].1));
+                                }
+
+                                parameters[0] = (Some(qualifier), "self".to_owned(), format!("{}", struct_name));
                             } else {
                                 return Err(format!("Implementation function '{}.{}' must reference 'self'", struct_name, name));
                             }
@@ -358,7 +366,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
             context.scopes.pop_scope();
         }
 
-        Statement::While { condition, block } => {
+        Statement::While { condition, block, do_while: _ } => {
             let span = input.evaluate_span(condition.span);
             
             let expr_type = context.expression_type(&condition.expression).map_err(|e|

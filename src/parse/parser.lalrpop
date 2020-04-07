@@ -10,12 +10,16 @@ match {
     // Special case
     r"[a-z]?(vec)[1-4]" => VEC_IDENTIFIER,
 
+    
+    // TODO: This should not require an exact match (temporary solution)
+    r"(@FRAGMENT)|(@VERTEX)|(@COMPUTE)" => { },
+
+    
     // Ignore comments
+    
     // from https://github.com/lalrpop/lalrpop/pull/509/commits/ee2f7060e99f902620ac4edeea5cfe3c3551f09c)
     r"\s*" => { },
     // Skip the header
-    // TODO: This should not require an exact match (temporary solution)
-    r"(@FRAGMENT)|(@VERTEX)|(@COMPUTE)" => { },
     r"//[^\n\r]*[\n\r]*" => { },
     // TODO: Look at this regex; it may do more than I want/need 
     // FIXME: In-line comments don't work
@@ -82,25 +86,19 @@ Function: ast::Item = {
 
 #[inline]
 FunctionParams: Vec<(Option<ast::FuncParamQualifier>, String, String)> = {
-    "(" <self_single:(Ident)?>
-        <self_comma:(<Ident> ",")?>
+    // TODO: Do not allow 'self' stuff outside of implementation
+    "(" <self_single:(<ParamQualifier?> <Ident>)?>
+        <self_comma:(<ParamQualifier?> <Ident> ",")?>
         <multi:(<ParamQualifier?> <Ident> ":" <Ident> ",")*> 
         <single:(<ParamQualifier?> <Ident> ":" <Ident>)?>
     ")" 
     => {
         let mut params = Vec::new();
         
-        // FIXME: This whole thing is ugly, but it works
         if let Some(s) = self_single {
-            if s != "self" {
-                exit!("Error: TODO: not 'self'");
-            }
-            params.push( (Some(ast::FuncParamQualifier::InOut), "self".to_owned(), "self".to_owned()) ); 
+            params.push( (s.0.clone(), s.1.to_owned(), "self".to_owned()) ); 
         } else if let Some(sc) = self_comma {
-            if sc != "self" {
-                exit!("Error: TODO: not 'self'");
-            }
-            params.push( (Some(ast::FuncParamQualifier::InOut), "self".to_owned(), "self".to_owned()) ); 
+            params.push( (sc.0.clone(), sc.1.to_owned(), "self".to_owned()) ); 
         }
 
         params.extend_from_slice(&multi[0..]);
@@ -195,8 +193,17 @@ WhileLoop: ast::Statement = {
         ast::Statement::While {
             condition: cond,
             block: statements,
+            do_while: false,
         }
-    }
+    },
+
+    "do" <statements:StatementBlock> "while" <cond:SpannedExpression> ";" => {
+        ast::Statement::While {
+            condition: cond,
+            block: statements,
+            do_while: true,
+        }
+    },
 }
 
 StatementBlock: Vec<ast::Statement> = {

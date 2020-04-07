@@ -119,14 +119,22 @@ pub fn translate_statement(statement: &Statement) -> String {
             glsl.push_str("break");
         }
 
-        Statement::While { condition, block } => {
-            glsl.push_str(&format!("while ({}) {{\n", translate_expression(&condition.expression)));
+        Statement::While { condition, block, do_while } => {
+            if *do_while {
+                glsl.push_str("do {\n");
+            } else {   
+                glsl.push_str(&format!("while ({}) {{\n", translate_expression(&condition.expression)));
+            }
 
             for block_stmt in block {
                 glsl.push_str(&format!("\t\t{}", translate_statement(block_stmt)));
             }
 
             glsl.push_str("\t}");
+
+            if *do_while {
+                glsl.push_str(&format!(" while ({})", translate_expression(&condition.expression)));
+            }
         }
 
         // TODO: Consider generating a while loop instead
