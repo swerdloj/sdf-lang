@@ -112,6 +112,15 @@ pub fn translate_statement(statement: &Statement) -> String {
     let mut glsl = String::new();
 
     match statement {
+        Statement::Constant(constant) => {
+            glsl.push_str(&translate_const(constant));
+
+            // Remove the ";\n\n" added in translate_const
+            glsl.pop();
+            glsl.pop();
+            glsl.pop();
+        }
+
         Statement::Continue(_span) => {
             glsl.push_str("continue");
         }

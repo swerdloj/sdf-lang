@@ -12,7 +12,8 @@ match {
 
     
     // TODO: This should not require an exact match (temporary solution)
-    r"(@FRAGMENT)|(@VERTEX)|(@COMPUTE)" => { },
+    //       and should instead be checked by validator
+    r"@((FRAGMENT)|(VERTEX)|(COMPUTE)|(LIB))" => { },
 
     
     // Ignore comments
@@ -27,7 +28,6 @@ match {
 } else {
     _
 }
-
 
 // ---------------- AST ----------------
 
@@ -44,6 +44,14 @@ Item: ast::Item = {
     Implementation => <>,
     Scene => <>,
     Struct => <>,
+
+    // Import a local file using "import filename;"
+    <l:@L> "import" <id:Ident> ";" <r:@R> => {
+        ast::Item::Import {
+            file_name: id.to_owned(),
+            span: (l, r),
+        }
+    }
 }
 
 // ---------------- SCENE ----------------
@@ -147,6 +155,7 @@ StructFields: Vec<(String, String, Option<ast::Expression>)> = {
 
 Statement: ast::Statement = {
     LetStatement => <>,
+    <c:ConstDeclaration> => ast::Statement::Constant(c),
     
     // TODO: Type check with owning function
     "return" <expr:(SpannedExpression)?> ";" => {

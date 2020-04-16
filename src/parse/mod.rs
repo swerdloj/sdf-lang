@@ -31,6 +31,9 @@ impl Input {
                     "@COMPUTE" => {
                         context::ShaderType::Compute
                     }
+                    "@LIB" => {
+                        context::ShaderType::Library
+                    }
                     _ => {
                         crate::exit!("TEMPORARY Error: Shader type not specified (must be exact match) as first line")
                     }

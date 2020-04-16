@@ -1,21 +1,10 @@
 @FRAGMENT
 
+import sd_primitives;
+
 const MAX_STEPS:        int   = 100;
 const MAX_DISTANCE:     float = 70.;
 const SURFACE_DISTANCE: float = 0.001;
-
-
-fn sd_plane(point: vec3, normal: vec3) -> float {
-    return dot(point, normalize(normal));
-}
-
-fn sd_sphere(point: vec3, radius: float) -> float {
-    return length(point) - radius;
-}
-
-fn sd_box(point: vec3, dimensions: vec3) -> float {
-    return max(max(abs(point.x) - dimensions.x, abs(point.y) - dimensions.y), abs(point.z) - dimensions.z);
-}
 
 struct Camera {
     position: vec3 = vec3(0., 4., -5.),
@@ -194,6 +183,8 @@ fn render_AA(camera: Camera, AA: int) -> vec3 {
 }
 
 fn main() {
+    const test: float = 1.;
+
     let camera: Camera {
         position: vec3(sin(time*0.3)*3., 1., cos(time*0.3)*3.),
     };

@@ -1,0 +1,13 @@
+@LIB
+
+fn sd_plane(point: vec3, normal: vec3) -> float {
+    return dot(point, normalize(normal));
+}
+
+fn sd_sphere(point: vec3, radius: float) -> float {
+    return length(point) - radius;
+}
+
+fn sd_box(point: vec3, dimensions: vec3) -> float {
+    return max(max(abs(point.x) - dimensions.x, abs(point.y) - dimensions.y), abs(point.z) - dimensions.z);
+}

@@ -2,8 +2,7 @@
 
 ## Language
 ### Multiple Files
-- Allow importing functions/structs from other files
-- Consider a module system and namespacing
+- Implement a module system with namespacing and public/private
 ### Empty Structs
 - GLSL does not allow structs without any fields
   - Could get around this by adding a dummy field when parsing the .sdf file

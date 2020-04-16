@@ -28,6 +28,10 @@ pub enum Item {
         // Contains only functions with references to `self`
         functions: Vec<Item>,
     },
+    Import {
+        file_name: String,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -147,6 +151,7 @@ pub enum Statement {
         ident: String,
         constructor: Constructor,
     },
+    Constant(ConstDeclaration),
     Assignment {
         lhs: IdentOrMember,
         op: AssignmentOperator,

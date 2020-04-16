@@ -127,10 +127,12 @@ impl Scope {
     }
 }
 
+#[derive(PartialEq)]
 pub enum ShaderType {
     Vertex,
     Fragment,
     Compute,
+    Library,
 }
 
 pub struct Context {
@@ -207,6 +209,10 @@ impl Context {
 
             ShaderType::Compute => {
                 // TODO: This
+            }
+
+            ShaderType::Library => {
+                // Nothing to do here
             }
         }
 
@@ -374,7 +380,7 @@ impl Context {
         Ok(constructor)
     }
 
-    pub fn declare_function(&mut self, name: String, declared_parameters: Vec<(Option<ast::FuncParamQualifier>, String, String)>, ty: String) -> Result<(), String> {
+    pub fn declare_function(&mut self, name: String, declared_parameters: Vec<(Option<ast::FuncParamQualifier>, String, String)>, ty: String) -> Result<(), String> {       
         if glsl::functions::is_builtin(&name) {
             return Err(format!("A builtin function, '{}' exists with the same name", &name));
         }
