@@ -1,0 +1,19 @@
+@VERTEX
+
+fn array_test(array: [float; 2]) -> [float; 5] {
+
+}
+
+fn main() {
+    let test_array: [float; 2] = [1., -2.];
+    // FIXME: Type inferrence isn't correct for indexing arrays
+    let z = 2 * -test_array[1 + 1];
+
+    const verticies: [vec4; 3] = [
+        vec4(  0.,  10., 0.5, 1.0),
+        vec4(-10.,  -1., 0.5, 1.0),
+        vec4( 10.,  -1., 0.5, 1.0)
+    ];
+
+    // gl_Position = verticies[gl_VertexID];
+}

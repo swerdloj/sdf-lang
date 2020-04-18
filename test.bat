@@ -1,7 +1,6 @@
 @echo off
 
-set target=fragment
-
+:: Which program to test
 set which=%1
 
 if not defined which (
@@ -10,10 +9,23 @@ if not defined which (
 )
     
 
+:: Build flag (like '--release')
 set cargoflags=%2
+
+if "%cargoflags%" == "_" (
+    set cargoflags=
+)
 
 if not defined cargoflags (
     set cargoflags=
+)
+
+
+:: Which '.sdf' file to use
+set target=%3
+
+if not defined target (
+    set target=fragment
 )
 
 

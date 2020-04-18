@@ -1,4 +1,6 @@
 use crate::parse::ast;
+use crate::parse::ast::TypeSpecifier;
+
 use super::glsl::castable;
 use super::glsl;
 
@@ -9,15 +11,15 @@ use std::collections::{HashMap, HashSet};
 struct StructSignature {
     name: String,
     // Fields and types with optional defaults (field, type, default)
-    fields: Vec<(String, String, Option<ast::Expression>)>,
+    fields: Vec<(String, TypeSpecifier, Option<ast::Expression>)>,
     has_implementation: bool,
 }
 
 struct FunctionSignature {
     name: String,
     // (field_name, field_type)
-    parameters: Vec<(String, String)>,
-    return_type: String,
+    parameters: Vec<(String, TypeSpecifier)>,
+    return_type: TypeSpecifier,
 }
 
 // TODO: Refactor type system to be like this
@@ -25,7 +27,7 @@ struct FunctionSignature {
 pub enum ScopeType {
     Global,
     Function {
-        return_type: String,
+        return_type: TypeSpecifier,
     },
     If,
     Loop,
@@ -34,7 +36,7 @@ pub enum ScopeType {
 
 pub struct Scope {
     // scope -> (name -> (type, is_const))
-    scopes: HashMap<usize, HashMap<String, (String, bool)>>,
+    scopes: HashMap<usize, HashMap<String, (TypeSpecifier, bool)>>,
 
     // "global", "loop", "if", "function", "scene", etc.
     scope_variants: Vec<ScopeType>,
@@ -61,7 +63,7 @@ impl Scope {
         self.scope_variants.contains(&ScopeType::Loop)
     }
 
-    pub fn expected_return_type(&self) -> Result<String, String> {
+    pub fn expected_return_type(&self) -> Result<TypeSpecifier, String> {
         for scope in &self.scope_variants {
             if let ScopeType::Function {return_type: t} = scope {
                 return Ok(t.clone());
@@ -88,8 +90,8 @@ impl Scope {
         self.current -= 1;
     }
 
-    fn add_var_to_scope(&mut self, name: String, ty: String, is_constant: bool) -> Result<(), String> {
-        if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), (ty, is_constant)) {
+    fn add_var_to_scope(&mut self, name: String, ty: TypeSpecifier, is_constant: bool) -> Result<(), String> {
+        if let Some(_old) = self.scopes.get_mut(&self.current).unwrap().insert(name.clone(), (ty.clone(), is_constant)) {
             Err(format!("Variable '{}' already exists in the current scope", name))
         } else {   
             Ok(())
@@ -106,10 +108,10 @@ impl Scope {
         false
     }
 
-    pub fn var_type(&self, name: &str) -> Result<String, String> {
+    pub fn var_type(&self, name: &str) -> Result<&TypeSpecifier, String> {
         for scope in 0..=self.current {
             if let Some((ty, _is_const)) = self.scopes.get(&scope).unwrap().get(name) {
-                return Ok(ty.to_owned());
+                return Ok(ty);
             }
         }
 
@@ -127,7 +129,7 @@ impl Scope {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum ShaderType {
     Vertex,
     Fragment,
@@ -136,6 +138,9 @@ pub enum ShaderType {
 }
 
 pub struct Context {
+    /// Which shader type the current Context is for (unaffected by imports)
+    pub shader_type: ShaderType,
+
     /// Function name -> Function signature
     functions: HashMap<String, FunctionSignature>,
 
@@ -148,8 +153,8 @@ pub struct Context {
     /// Collection of user-declared uniforms, their types, and defaults
     // TODO: Default value is not implemented yet
     // TODO: Implement the scope for tagged variables (and allow shadowing?)
-    uniforms: HashSet<(String, String, /* DEFAULT VALUE HERE */)>,
-    outs: HashSet<(String, String, /* DEFAULT VALUE HERE */)>,
+    uniforms: HashSet<(String, TypeSpecifier, /* DEFAULT VALUE HERE */)>,
+    outs: HashSet<(String, TypeSpecifier, /* DEFAULT VALUE HERE */)>,
 
     pub scopes: Scope,
 }
@@ -200,9 +205,9 @@ impl Context {
 
             ShaderType::Fragment => {
                 // FIXME: This MUST be in out location 0 (must save this particular location)
-                outs.insert(("out_color".to_owned(), "vec4".to_owned()));
-                scopes.add_var_to_scope( "out_color".to_owned(),    "vec4".to_owned(), false).unwrap();
-                scopes.add_var_to_scope( "gl_FragCoord".to_owned(), "vec4".to_owned(), true).unwrap();
+                outs.insert(("out_color".to_owned(), TypeSpecifier::from_ident("vec4")));
+                scopes.add_var_to_scope( "out_color".to_owned(),    TypeSpecifier::from_ident("vec4"), false).unwrap();
+                scopes.add_var_to_scope( "gl_FragCoord".to_owned(), TypeSpecifier::from_ident("vec4"), true).unwrap();
                 
                 // TODO: Add the rest
             }
@@ -216,17 +221,21 @@ impl Context {
             }
         }
 
-        // TODO: Most of this should be reserved for scenes? Or make it optional via directive
-
-
-        uniforms.insert(("time".to_owned(), "float".to_owned()));
-        uniforms.insert(("window_dimensions".to_owned(), "vec2".to_owned()));
-        uniforms.insert(("mouse_position".to_owned(), "vec2".to_owned()));
         
-        scopes.add_var_to_scope( "time".to_owned(), "float".to_owned(), false              ).unwrap();
-        scopes.add_var_to_scope( "window_dimensions".to_owned(), "vec2".to_owned(), false  ).unwrap();
+        // Libraries should not require feature usage
+        if *shader_type != ShaderType::Library {   
+            // TODO: Make these features optional via opt-in (like "use time ...")
+
+            uniforms.insert(("time".to_owned(), TypeSpecifier::from_ident("float")));
+            uniforms.insert(("window_dimensions".to_owned(), TypeSpecifier::from_ident("vec2")));
+            uniforms.insert(("mouse_position".to_owned(), TypeSpecifier::from_ident("vec2")));
+            
+            scopes.add_var_to_scope( "time".to_owned(), TypeSpecifier::from_ident("float"), false              ).unwrap();
+            scopes.add_var_to_scope( "window_dimensions".to_owned(), TypeSpecifier::from_ident("vec2"), false  ).unwrap();
+        }
 
         Context {
+            shader_type: shader_type.clone(),
             functions,
             structs: HashMap::new(),
             primitive_types,
@@ -236,12 +245,12 @@ impl Context {
         }
     }
 
-    pub fn add_var_to_scope(&mut self, name: String, ty: String, is_constant: bool) -> Result<(), String> {
+    pub fn add_var_to_scope(&mut self, name: String, ty: TypeSpecifier, is_constant: bool) -> Result<(), String> {
         if self.is_primitive(&name) {
             return Err(format!("Cannot name variable as primitive type '{}'", name));
         }
 
-        self.scopes.add_var_to_scope(name, ty, is_constant)?;
+        self.scopes.add_var_to_scope(name, ty.clone(), is_constant)?;
 
         Ok(())
     }
@@ -250,21 +259,21 @@ impl Context {
         self.primitive_types.contains(type_name)
     }
 
-    pub fn declare_uniform(&mut self, name: String, ty: String /*, initial_value: ?? */) -> Result<(), String> {
-        if !self.uniforms.insert((name.clone(), ty)) {
+    pub fn declare_uniform(&mut self, name: String, ty: TypeSpecifier /*, initial_value: ?? */) -> Result<(), String> {
+        if !self.uniforms.insert((name.clone(), ty.clone())) {
             Err(format!("Uniform '{}' was already declared", &name))
         } else {
             Ok(())
         }
     }
 
-    pub fn uniforms(&self) -> &HashSet<(String, String)> {
+    pub fn uniforms(&self) -> &HashSet<(String, TypeSpecifier)> {
         &self.uniforms
     }
 
     /// Fill a given HashMap with uniform information.
     /// name -> (location, type)
-    pub fn get_uniform_map(&self, map: &mut HashMap<String, (usize, String)>) {
+    pub fn get_uniform_map(&self, map: &mut HashMap<String, (usize, TypeSpecifier)>) {
         let mut location = 0;
         for (name, ty) in &self.uniforms {
             map.insert(name.clone(), (location, ty.clone()));
@@ -272,26 +281,28 @@ impl Context {
         }
     }
     
-    pub fn declare_out(&mut self, name: String, ty: String /*, initial_value: ?? */) -> Result<(), String> {
-        if !self.outs.insert((name.clone(), ty)) {
+    pub fn declare_out(&mut self, name: String, ty: TypeSpecifier /*, initial_value: ?? */) -> Result<(), String> {
+        if !self.outs.insert((name.clone(), ty.clone())) {
             Err(format!("Out '{}' was already declared", &name))
         } else {
             Ok(())
         }
     }
     
-    pub fn outs(&self) -> &HashSet<(String, String)> {
+    pub fn outs(&self) -> &HashSet<(String, TypeSpecifier)> {
         &self.outs
     }
 
-    pub fn declare_struct(&mut self, name: String, passed_fields: Vec<(String, String, Option<ast::Expression>)>) -> Result<(), String> {       
+    pub fn declare_struct(&mut self, name: String, passed_fields: Vec<(String, TypeSpecifier, Option<ast::Expression>)>) -> Result<(), String> {       
         if self.is_primitive(&name) {
             return Err(format!("Cannot name struct '{}' the same as a primitive type", &name));
         }
 
         let mut fields = Vec::new();
         for (field, ty, default) in passed_fields {
-            fields.push( (field.clone(), self.validate_type(&ty)?, default.clone()) );
+            fields.push( 
+                ( field.clone(), self.validate_type(&ty)?, default.clone() ) 
+            );
         }
         
         let signature = StructSignature {
@@ -321,11 +332,11 @@ impl Context {
         Ok(())
     }
 
-    pub fn struct_field_type(&self, struct_name: &str, field_name: &str) -> Result<String, String> {
+    pub fn struct_field_type(&self, struct_name: &str, field_name: &str) -> Result<&TypeSpecifier, String> {
         if let Some(signature) = self.structs.get(struct_name) {
             for (name, ty, _default) in &signature.fields {
                 if name == field_name {
-                    return Ok(ty.to_owned());
+                    return Ok(ty);
                 }
             }
             Err(format!("Struct '{}' does not have field '{}'", struct_name, field_name))
@@ -361,7 +372,7 @@ impl Context {
         for (field_name, field_type, default) in &signature.fields {
             if let Some(user_supplied) = supplied.get(field_name) {
                 // Ensure types are compatible
-                if !castable(&self.expression_type(&user_supplied.expression)?, field_type)? {
+                if !castable(&self.expression_type(&user_supplied.expression)?, &field_type.as_string())? {
                     return Err(format!("The field '{}' on struct '{}' has type '{}', but got incompatible type '{}'", field_name, ty, field_type, self.expression_type(&user_supplied.expression)?));
                 }
 
@@ -380,7 +391,7 @@ impl Context {
         Ok(constructor)
     }
 
-    pub fn declare_function(&mut self, name: String, declared_parameters: Vec<(Option<ast::FuncParamQualifier>, String, String)>, ty: String) -> Result<(), String> {       
+    pub fn declare_function(&mut self, name: String, declared_parameters: Vec<(Option<ast::FuncParamQualifier>, String, TypeSpecifier)>, return_type: TypeSpecifier) -> Result<(), String> {       
         if glsl::functions::is_builtin(&name) {
             return Err(format!("A builtin function, '{}' exists with the same name", &name));
         }
@@ -397,7 +408,7 @@ impl Context {
         let signature = FunctionSignature {
             name: name.clone(),
             parameters,
-            return_type: ty,
+            return_type,
         };
         
         if let Some(old) = self.functions.insert(name, signature) {
@@ -408,18 +419,17 @@ impl Context {
     }
 
     // TODO: Force 2-parameter functions only (for sanity/feasability)
-    // TODO: Allow builtin functions (needs overload check, etc.)
-    // TODO: Do not allow vec constructors to pass throug here
-    pub fn check_function_apply(&self, name: &str, passed_param_types: Vec<String>) -> Result<(usize, String), String> {
+    // TODO: Do not allow vec constructors to pass through here
+    pub fn check_function_apply(&self, name: &str, passed_param_types: Vec<TypeSpecifier>) -> Result<(usize, TypeSpecifier), String> {
         if glsl::functions::is_builtin(name) {
-            let ty = glsl::functions::can_arrow(name, &passed_param_types)?;
-            return Ok((2, ty.clone()));
+            let ty = glsl::functions::can_arrow( name, &passed_param_types )?;
+            return Ok((2, passed_param_types[0].clone()));
         }
         
         if let Some(signature) = self.functions.get(name) {   
             if signature.parameters.len() == 0 {
                 return Err(format!("The function '{}' does not accept any parameters", name));
-            } else if signature.return_type == "void" {
+            } else if signature.return_type.as_string() == "void" {
                 return Err(format!("The function '{}' does not return anything (required for '<-' syntax)", name));
             }
 
@@ -452,12 +462,13 @@ impl Context {
 
     /// Validates a function call, returning the function's type.
     /// Constructs vector types similarly.
-    pub fn check_function_call(&self, name: &str, passed_param_types: Vec<String>) -> Result<String, String> {
+    pub fn check_function_call(&self, name: &str, passed_param_types: Vec<TypeSpecifier>) -> Result<TypeSpecifier, String> {
+        // None of these special cases can ever be arrays
         if glsl::vec::is_vec_constructor_or_type(name) {
             return glsl::vec::validate_constructor(name, &passed_param_types);
         }
         else if glsl::functions::is_builtin(name) {
-            return glsl::functions::validate_function(name, &passed_param_types);
+            return Ok(TypeSpecifier::Identifier(glsl::functions::validate_function(name, &passed_param_types)?));
         }
         
         if let Some(function) = self.functions.get(name) {
@@ -466,7 +477,7 @@ impl Context {
             }
 
             for ((param_name, param_type), passed_type) in function.parameters.iter().zip(passed_param_types.iter()) {
-                if !castable(passed_type, param_type)? {
+                if !castable(&passed_type.as_string(), &param_type.as_string())? {
                     return Err(format!("The parameter '{}' in function '{}' takes a '{}', but a '{}' was given (cannot cast)",
                                                         param_name, name, param_type, passed_type));
                 }
@@ -606,18 +617,29 @@ impl Context {
         }
     }
 
-    /// Returns type_name if it is a valid, previously declared type.
-    /// Otherwise, prints error and exits
-    pub fn validate_type(&self, type_name: &str) -> Result<String, String> {
-        if self.primitive_types.contains(type_name) || self.structs.contains_key(type_name) {
-            Ok(type_name.to_owned())
-        } else {   
-            Err(format!("Unknown or undeclared type '{}'", type_name))
+    /// Returns the TypeSpecifier if it is of a valid type/array.
+    pub fn validate_type(&self, ty: &TypeSpecifier) -> Result<TypeSpecifier, String> {
+        if self.primitive_types.contains(ty.type_name()) || self.structs.contains_key(ty.type_name()) {
+            Ok(ty.clone())
+        } else {
+            Err(format!("Unknown or undeclared type '{}'", ty.type_name()))
+        }
+    }
+
+    pub fn validate_type_name(&self, name: &str) -> Result<(), String> {
+        if self.primitive_types.contains(name) || self.structs.contains_key(name) {
+            Ok(())
+        } else {
+            Err(format!("Unknown or undeclared type '{}'", name))
         }
     }
 
     pub fn expression_type(&self, expression: &ast::Expression) -> Result<String, String>{
         Ok(match expression {
+            ast::Expression::ArrayConstructor { expressions, ty } => {
+                format!("{}[{}]", ty, expressions.len())
+            }
+
             ast::Expression::Parenthesized(expr) => {
                 self.expression_type(expr.as_ref())?
             }
@@ -646,15 +668,28 @@ impl Context {
             }
 
             ast::Expression::Identifier(name) => {
-                self.scopes.var_type(name)?
+                self.scopes.var_type(name)?.as_string()
             }
 
             ast::Expression::Binary {ty, ..} => {
                 ty.clone()
             }
 
-            ast::Expression::Unary {ty, ..} => {
-                ty.clone()
+            ast::Expression::Unary {operator, expr: _, ty} => {
+                match operator {
+                    ast::UnaryOperator::Index(_) => {
+                        // TODO: Is this correct?
+                        // TODO: Note that multi-dimensional arrays are version 4.30+ only
+                        
+                        // Strip the array type off, leaving only the base type
+                        // ty.split("[").take(1).collect::<Vec<&str>>()[0].to_owned()
+                        ty.split("[").next().unwrap().to_owned()
+                    }
+                    
+                    _ => {
+                        ty.clone()
+                    }
+                }
             }
 
             ast::Expression::FunctionApply(apply) => {
@@ -665,7 +700,7 @@ impl Context {
                 call.ty.clone()
             }
 
-            ast::Expression::If {ty, .. } => {
+            ast::Expression::If {ty, ..} => {
                 ty.clone()
             }
 

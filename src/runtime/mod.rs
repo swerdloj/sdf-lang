@@ -17,7 +17,7 @@ use std::collections::HashMap;
 pub struct Runtime {
     sdf_path: PathBuf,
     /// name -> (location, type)
-    uniforms: HashMap<String, (usize, String)>,
+    uniforms: HashMap<String, (usize, parse::ast::TypeSpecifier)>,
     /// One VAO must be bound to draw anything
     _dummy_vao: opengl::DummyVAO,
 }

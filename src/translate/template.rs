@@ -3,11 +3,11 @@ use crate::parse::ast::*;
 use std::collections::HashSet;
 
 // TODO: Assign uniforms their default value (type checked)
-pub fn translate_uniforms(uniforms: &HashSet<(String, String)>) -> String {
+pub fn translate_uniforms(uniforms: &HashSet<(String, TypeSpecifier)>) -> String {
     let mut glsl = String::new();
 
     for (index, (name, ty)) in uniforms.iter().enumerate() {
-        glsl.push_str(&format!("layout(location = {}) uniform {} {};\n", index, ty, name));
+        glsl.push_str(&format!("layout(location = {}) uniform {};\n", index, translate_type_specifier(Some(name), &ty)));
     }
 
     if uniforms.len() >= 1 {
@@ -17,11 +17,11 @@ pub fn translate_uniforms(uniforms: &HashSet<(String, String)>) -> String {
     glsl
 }
 
-pub fn translate_outs(outs: &HashSet<(String, String)>) -> String {
+pub fn translate_outs(outs: &HashSet<(String, TypeSpecifier)>) -> String {
     let mut glsl = String::new();
 
     for (index, (name, ty)) in outs.iter().enumerate() {
-        glsl.push_str(&format!("layout(location = {}) out {} {};\n", index, ty, name));
+        glsl.push_str(&format!("layout(location = {}) out {};\n", index, translate_type_specifier(Some(name), &ty)));
     }
 
     if outs.len() >= 1 {
@@ -31,12 +31,39 @@ pub fn translate_outs(outs: &HashSet<(String, String)>) -> String {
     glsl
 }
 
+pub fn translate_type_specifier(variable: Option<&str>, t: &TypeSpecifier) -> String {
+    let mut glsl = String::new();
+
+    glsl.push_str(t.type_name());
+
+    if let Some(ref var) = variable {
+        glsl.push(' ');
+        glsl.push_str(var);
+    }
+
+    match t {
+        TypeSpecifier::Identifier(_ident) => {},
+        TypeSpecifier::Array { ty: _, size } => glsl.push_str(&format!("[{}]", size)),
+    }
+
+    glsl
+}
+
 pub fn translate_const(constant: &ConstDeclaration) -> String {
-    format!("const {} {} = {};\n\n", constant.ty, constant.ident, translate_expression(&constant.value.expression))
+    let (ty, ident) = match &constant.ty {
+        TypeSpecifier::Identifier(id) => {
+            (id.clone(), constant.ident.clone())
+        },
+        TypeSpecifier::Array { ty, size } => {
+            (ty.clone(), format!("{}[{}]", &constant.ident, size))
+        }
+    };
+    //       const vec4 vert[x] = ...
+    format!("const {} {} = {};\n\n", ty, ident, translate_expression(&constant.value.expression))
 }
 
 // Note that GLSL does not support struct defaults
-pub fn translate_structure(name: &str, fields: &Vec<(String, String, Option<Expression>)>) -> String {
+pub fn translate_structure(name: &str, fields: &Vec<(String, TypeSpecifier, Option<Expression>)>) -> String {
     let mut glsl = String::new();
 
     glsl.push_str(&format!("struct {} {{\n", name));
@@ -53,7 +80,7 @@ pub fn translate_structure(name: &str, fields: &Vec<(String, String, Option<Expr
     glsl
 }
 
-pub fn translate_function(name: &str, parameters: &Vec<(Option<FuncParamQualifier>, String, String)>, return_type: &str, statements: &Vec<Statement>) -> String {
+pub fn translate_function(name: &str, parameters: &Vec<(Option<FuncParamQualifier>, String, TypeSpecifier)>, return_type: &TypeSpecifier, statements: &Vec<Statement>) -> String {
     let mut glsl = String::new();
 
     let mut param_string = String::new();
@@ -65,14 +92,14 @@ pub fn translate_function(name: &str, parameters: &Vec<(Option<FuncParamQualifie
                 FuncParamQualifier::InOut => param_string.push_str("inout "),
             }
         }
-        param_string.push_str(&format!("{} {}, ", param_type, param_name));
+        param_string.push_str(&format!("{}, ", translate_type_specifier(Some(param_name), param_type)));
     }
 
     // Remove trailing ", "
     param_string.pop();
     param_string.pop();
 
-    glsl.push_str(&format!("{} {}({}) {{\n", return_type, name, param_string));
+    glsl.push_str(&format!("{} {}({}) {{\n", translate_type_specifier(None, return_type), name, param_string));
 
     for nested_statement in statements {
         // Tagged variables are placed in global scope (required by GLSL)
@@ -176,7 +203,17 @@ pub fn translate_statement(statement: &Statement) -> String {
                 panic!(format!("Error: The type of '{}' could not be determined. Consider annotating the type.", ident));
             }
 
-            glsl.push_str(&format!("{} {}", &ty.as_ref().unwrap(), ident));
+            // FIXME: A lot of confusing shadowing happens here
+            let (ty, ident) = match ty.as_ref().unwrap() {
+                TypeSpecifier::Identifier(id) => {
+                    (id.clone(), ident.clone())
+                },
+                TypeSpecifier::Array { ty, size } => {
+                    (ty.clone(), format!("{}[{}]", ident, size))
+                }
+            };
+
+            glsl.push_str(&format!("{} {}", ty, ident));
 
             if let Some(assignment) = expr {
                 glsl.push_str(&format!(" = {}", translate_expression(&assignment.expression)));
@@ -245,9 +282,21 @@ pub fn translate_expression(expr: &Expression) -> String {
     let mut glsl = String::new();
     
     match expr {
+        Expression::ArrayConstructor { expressions, ty } => {
+            glsl.push_str(&format!("{}[](", ty));
+            for item in expressions {
+                glsl.push_str(&translate_expression(item));
+                glsl.push_str(", ");
+            }
+            // Remove trailing ", "
+            glsl.pop();
+            glsl.pop();
+            glsl.push(')');
+        }
+
         Expression::Parenthesized(pexpr) => {
             glsl.push('(');
-            glsl.push_str(&translate_expression(pexpr.as_ref()));
+            glsl.push_str(&translate_expression(pexpr));
             glsl.push(')');
         }
 
@@ -345,18 +394,20 @@ pub fn translate_expression(expr: &Expression) -> String {
             glsl.pop();
         }
 
-        Expression::Unary { operator, rhs, .. } => {
+        Expression::Unary { operator, expr, .. } => {
             match operator {
+                UnaryOperator::Index(index_expr) => {
+                    glsl.push_str(&format!("{}[{}]", translate_expression(expr), translate_expression(index_expr)));
+                }
+
                 UnaryOperator::Negate => {
-                    glsl.push('-');
+                    glsl.push_str(&format!("-{}", translate_expression(expr)));
                 }
 
                 UnaryOperator::Not => {
-                    glsl.push('!');
+                    glsl.push_str(&format!("!{}", translate_expression(expr)));
                 }
             }
-
-            glsl.push_str(&translate_expression(rhs));
         }
 
         Expression::FunctionApply(apply) => {

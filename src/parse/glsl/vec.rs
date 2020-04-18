@@ -1,3 +1,5 @@
+use crate::parse::ast::TypeSpecifier;
+
 use super::castable;
 
 // TODO: Add the remaining vec types
@@ -100,7 +102,7 @@ fn vec_primitive_type(vec_type: &str) -> &'static str {
 
 // See https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#Vector_constructors
 /// Returns vec type if the constructor is valid
-pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> Result<String, String> {
+pub fn validate_constructor(vec_type: &str, passed: &Vec<TypeSpecifier>) -> Result<TypeSpecifier, String> {
     let num_args = passed.len();
     let primitive = vec_primitive_type(vec_type);
 
@@ -109,8 +111,8 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> Result<Stri
     }
     
     // Special case for 'vec3(1.)' or similar
-    if num_args == 1 && castable(&passed[0], vec_primitive_type(vec_type))? {
-        return Ok(vec_type.to_owned());
+    if num_args == 1 && castable(&passed[0].as_string(), vec_primitive_type(vec_type))? {
+        return Ok(TypeSpecifier::Identifier(vec_type.to_owned()));
     }
 
     match vec_type {
@@ -118,7 +120,7 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> Result<Stri
             if num_args > 2 {
                 return Err(format!("Error: Too many arguments for '{}'", vec_type));
             }
-            if !castable(&passed[0], primitive)? || !castable(&passed[1], primitive)? {
+            if !castable(&passed[0].as_string(), primitive)? || !castable(&passed[1].as_string(), primitive)? {
                 return Err(format!("Error: Both '{}' arguments must be castable to '{}'", vec_type, primitive));
             }
         }
@@ -133,13 +135,13 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> Result<Stri
 
             // vec3 can be made of one vec2 and one primitive
             if num_args == 2 && 
-                ! ( passed[0] == v2 && castable(&passed[1], primitive)?
-                ||  passed[1] == v2 && castable(&passed[0], primitive)? ) 
+                ! ( passed[0].as_string() == v2 && castable(&passed[1].as_string(), primitive)?
+                ||  passed[1].as_string() == v2 && castable(&passed[0].as_string(), primitive)? ) 
             {
                 return Err(format!("Error: '{}' can be built from only one '{}' and one '{}' or three '{}'s", vec_type, v2, primitive, primitive));
             }
 
-            if num_args == 3 && !(castable(&passed[0], primitive)? && castable(&passed[1], primitive)? && castable(&passed[2], primitive)?) {
+            if num_args == 3 && !(castable(&passed[0].as_string(), primitive)? && castable(&passed[1].as_string(), primitive)? && castable(&passed[2].as_string(), primitive)?) {
                 return Err(format!("Error: All three '{}' arguments must be castable to '{}'", vec_type, primitive));
             }
         }
@@ -158,25 +160,25 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> Result<Stri
             // vec4 can be made of one vec3 and one primitive
             // or two vec2s
             if num_args == 2 && 
-                ! ( passed[0] == v3 && castable(&passed[1], primitive)?
-                ||  passed[1] == v3 && castable(&passed[0], primitive)?
-                ||  passed[0] == v2 && passed[1] == v2 ) 
+                ! ( passed[0].as_string() == v3 && castable(&passed[1].as_string(), primitive)?
+                ||  passed[1].as_string() == v3 && castable(&passed[0].as_string(), primitive)?
+                ||  passed[0].as_string() == v2 && passed[1].as_string() == v2 ) 
             {
                 return Err(format!("Error: '{}' can be built from only two '{}'s, one '{}' and two '{}'s, one '{}' and one '{}', or four '{}'s", vec_type, v2, v2, primitive, v3, primitive, primitive));
             }
             
             // vec4 cn be made of one vec2 and two primitives
-            if num_args == 3 && !(  (passed[0] == v2 && castable(&passed[1], primitive)? && castable(&passed[2], primitive)?) 
-            || (passed[1] == v2 && castable(&passed[0], primitive)? && castable(&passed[2], primitive)?)  
-            || (passed[2] == v2 && castable(&passed[0], primitive)? && castable(&passed[1], primitive)?) )
+            if num_args == 3 && !(  (passed[0].as_string() == v2 && castable(&passed[1].as_string(), primitive)? && castable(&passed[2].as_string(), primitive)?) 
+            || (passed[1].as_string() == v2 && castable(&passed[0].as_string(), primitive)? && castable(&passed[2].as_string(), primitive)?)  
+            || (passed[2].as_string() == v2 && castable(&passed[0].as_string(), primitive)? && castable(&passed[1].as_string(), primitive)?) )
             {
                 return Err(format!("Error: '{}' can be built from only two '{}'s, one '{}' and two '{}'s, one '{}' and one '{}', or four '{}'s", vec_type, v2, v2, primitive, v3, primitive, primitive));
             }
 
             // vec4 can be made of four primitives
             if num_args == 4 && 
-              !(castable(&passed[0], primitive)? && castable(&passed[1], primitive)? 
-                && castable(&passed[2], primitive)? && castable(&passed[3], primitive)?) 
+              !(castable(&passed[0].as_string(), primitive)? && castable(&passed[1].as_string(), primitive)? 
+                && castable(&passed[2].as_string(), primitive)? && castable(&passed[3].as_string(), primitive)?) 
             {
                 return Err(format!("Error: All four '{}' arguments must be castable to '{}'", vec_type, primitive))
             }
@@ -187,5 +189,5 @@ pub fn validate_constructor(vec_type: &str, passed: &Vec<String>) -> Result<Stri
         }
     }
 
-    Ok(vec_type.to_owned())
+    Ok(TypeSpecifier::Identifier(vec_type.to_owned()))
 }

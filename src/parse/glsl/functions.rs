@@ -1,3 +1,5 @@
+use crate::parse::ast::TypeSpecifier;
+
 use super::castable;
 
 // see http://www.shaderific.com/glsl-functions
@@ -6,6 +8,8 @@ use super::castable;
 //       that still won't work because of GLSL's overloading (give this error message)
 
 // FIXME: A lot of this code could be simplified (lots of repetition)
+
+// Note: No GLSL functions work with arrays
 
 pub fn is_builtin(function: &str) -> bool {
     match function {
@@ -23,31 +27,36 @@ pub fn is_builtin(function: &str) -> bool {
 }
 
 /// Workaround for overloaded methods within GLSL (sdf-lang does not support overloading)
-pub fn validate_function(function: &str, types: &Vec<String>) -> Result<String, String> {   
+pub fn validate_function(function: &str, types: &Vec<TypeSpecifier>) -> Result<String, String> {   
+    let as_strings: Vec<String> = types.iter().map(|t| t.as_string()).collect();
+    
     match types.len() {
         0 => Err(format!("Error: '{}' does not accept zero parameters", function)),
         
 
-        1 => validate_single_param(function, &types[0]),
-        2 => validate_two_params(function, types),
-        3 => validate_three_params(function, types),
+        1 => validate_single_param(function, &as_strings[0]).map(|t| t.to_owned()),
+        2 => validate_two_params(function, &as_strings).map(|t| t.to_owned()),
+        3 => validate_three_params(function, &as_strings).map(|t| t.to_owned()),
 
         n => Err(format!("Error: Function '{}' does not accept {} parameters", function, n)),
     }
 }
 
-pub fn can_arrow(function: &str, types: &Vec<String>) -> Result<String, String> {
+pub fn can_arrow(function: &str, types: &Vec<TypeSpecifier>) -> Result<String, String> {
     if function != "min" && function != "max" {
         return Err(format!("Function '{}' cannot use '<-' syntax", function));
     } else {
-        let expected_type = &types[0];
+        let expected_type = types[0].as_string();
         for ty in types {
-            if ty != expected_type {
+            if ty.as_string() != expected_type {
                 return Err(format!("To use '<-' syntax with '{}', all types must be same (got {:?})", function, types));
             }
         }
     }
-    validate_two_params(function, types)
+
+    // This will never allow arrays because no GLSL functions work with arrays
+    let strings = types.iter().map(|t| t.as_string()).collect();
+    validate_two_params(function, &strings).map(|t| t.to_owned())
 }
 
 // TODO: Matrices:  matrixCompMult,
@@ -223,7 +232,7 @@ fn validate_two_params(function: &str, types: &Vec<String>) -> Result<String, St
     }
 }
 
-fn validate_single_param(function: &str, ty: &str) -> Result<String, String> {
+fn validate_single_param<'a>(function: &str, ty: &'a str) -> Result<&'a str, String> {
     match function {
         "radians" | "degrees"     | 
         "sin"     | "cos"         | "tan"   |
@@ -236,22 +245,22 @@ fn validate_single_param(function: &str, ty: &str) -> Result<String, String> {
         => {
             // This is ok here (see top todo)
             if castable(ty, "float")? {
-                return Ok("float".to_owned());
+                return Ok("float");
             }
 
             match ty {
-                "float" | "vec2" | "vec3" | "vec4" => Ok(ty.to_owned()),
+                "float" | "vec2" | "vec3" | "vec4" => Ok(ty),
                 _ => Err(format!("Error: '{}' does not work with type '{}'", function, ty)),
             }
         }
 
         "length" => {
             if castable(ty, "float")? {
-                return Ok("float".to_owned());
+                return Ok("float");
             }
 
             match ty {
-                "float" | "vec2" | "vec3" | "vec4" => Ok("float".to_owned()),
+                "float" | "vec2" | "vec3" | "vec4" => Ok("float"),
                 _ => Err(format!("Error: '{}' does not work with type '{}'", function, ty)),
             }
         }

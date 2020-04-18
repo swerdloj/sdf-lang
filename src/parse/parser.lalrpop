@@ -13,6 +13,7 @@ match {
     
     // TODO: This should not require an exact match (temporary solution)
     //       and should instead be checked by validator
+    // Skip the header
     r"@((FRAGMENT)|(VERTEX)|(COMPUTE)|(LIB))" => { },
 
     
@@ -20,7 +21,6 @@ match {
     
     // from https://github.com/lalrpop/lalrpop/pull/509/commits/ee2f7060e99f902620ac4edeea5cfe3c3551f09c)
     r"\s*" => { },
-    // Skip the header
     r"//[^\n\r]*[\n\r]*" => { },
     // TODO: Look at this regex; it may do more than I want/need 
     // FIXME: In-line comments don't work
@@ -75,12 +75,12 @@ Implementation: ast::Item = {
 }
 
 Function: ast::Item = {
-    "fn" <name:Ident> <params:FunctionParams> <return_type:("->" <Ident>)?> <s:StatementBlock> 
+    "fn" <name:Ident> <params:FunctionParams> <return_type:("->" <TypeSpecifier>)?> <s:StatementBlock> 
     => {
         let ret = if let Some(ty) = return_type {
             ty 
         } else {
-            "void".to_owned()
+            ast::TypeSpecifier::Identifier("void".to_owned())
         };
 
         ast::Item::Function {
@@ -93,20 +93,20 @@ Function: ast::Item = {
 }
 
 #[inline]
-FunctionParams: Vec<(Option<ast::FuncParamQualifier>, String, String)> = {
+FunctionParams: Vec<(Option<ast::FuncParamQualifier>, String, ast::TypeSpecifier)> = {
     // TODO: Do not allow 'self' stuff outside of implementation
     "(" <self_single:(<ParamQualifier?> <Ident>)?>
         <self_comma:(<ParamQualifier?> <Ident> ",")?>
-        <multi:(<ParamQualifier?> <Ident> ":" <Ident> ",")*> 
-        <single:(<ParamQualifier?> <Ident> ":" <Ident>)?>
+        <multi:(<ParamQualifier?> <Ident> ":" <TypeSpecifier> ",")*> 
+        <single:(<ParamQualifier?> <Ident> ":" <TypeSpecifier>)?>
     ")" 
     => {
         let mut params = Vec::new();
         
         if let Some(s) = self_single {
-            params.push( (s.0.clone(), s.1.to_owned(), "self".to_owned()) ); 
+            params.push( (s.0.clone(), s.1.to_owned(), ast::TypeSpecifier::Identifier("self".to_owned())) ); 
         } else if let Some(sc) = self_comma {
-            params.push( (sc.0.clone(), sc.1.to_owned(), "self".to_owned()) ); 
+            params.push( (sc.0.clone(), sc.1.to_owned(), ast::TypeSpecifier::Identifier("self".to_owned())) ); 
         }
 
         params.extend_from_slice(&multi[0..]);
@@ -138,9 +138,9 @@ Struct: ast::Item = {
 }
 
 #[inline]
-StructFields: Vec<(String, String, Option<ast::Expression>)> = {
-    <multi:(<Ident> ":" <Ident> <("=" <Expression>)?> ",")*> 
-    <single:(<Ident> ":" <Ident> <("=" <Expression>)?>)?> => {
+StructFields: Vec<(String, ast::TypeSpecifier, Option<ast::Expression>)> = {
+    <multi:(<Ident> ":" <TypeSpecifier> <("=" <Expression>)?> ",")*> 
+    <single:(<Ident> ":" <TypeSpecifier> <("=" <Expression>)?>)?> => {
         let mut fields = multi;
         
         if let Some(field) = single {
@@ -238,7 +238,7 @@ IdentOrMember: ast::IdentOrMember = {
 }
 
 ConstDeclaration: ast::ConstDeclaration = {
-    "const" <id:Ident> <ty: (":" <Ident>)> <expr: ("=" <SpannedExpression>)> ";" => {
+    "const" <id:Ident> <ty: (":" <TypeSpecifier>)> <expr: ("=" <SpannedExpression>)> ";" => {
         ast::ConstDeclaration {
             ident: id,
             ty: ty,
@@ -249,7 +249,7 @@ ConstDeclaration: ast::ConstDeclaration = {
 
 LetStatement: ast::Statement = {
     <tag:("@" <Tag>)?>
-    "let" <id:Ident> <ty: (":" <Ident>)?> <expr: ("=" <SpannedExpression>)?> ";" => { 
+    "let" <id:Ident> <ty: (":" <TypeSpecifier>)?> <expr: ("=" <SpannedExpression>)?> ";" => { 
         if ty.is_none() && expr.is_none() {
             exit!(format!("Error: Standalone let statements like 'let {};' are not yet implemented", &id));
         }
@@ -407,7 +407,7 @@ MultiplicativeExpr: ast::Expression = {
 
 // Second precedence - left associativity
 CastExpr: ast::Expression = {
-    <lhs:CastExpr> <op:CastOp> <rhs:BaseExpr> => {
+    <lhs:CastExpr> <op:CastOp> <rhs:UnaryExpr> => {
         ast::Expression::Binary {
             lhs: Box::new(lhs),
             operator: op,
@@ -418,7 +418,7 @@ CastExpr: ast::Expression = {
 
     Member => ast::Expression::Member(<>),
 
-    BaseExpr => <>,
+    UnaryExpr => <>,
 }
 
 Member: ast::Member = {
@@ -441,9 +441,41 @@ IdentOrFunction: ast::IdentOrFunction = {
     FunctionCall => ast::IdentOrFunction::Function(<>),
 }
 
+UnaryExpr: ast::Expression = {    
+    "-" <UnaryExpr> => {
+        ast::Expression::Unary {
+            operator: ast::UnaryOperator::Negate,
+            expr: Box::new(<>),
+            ty: "temp".to_owned(),
+        }
+    },
+    
+    "!" <UnaryExpr> => {
+        ast::Expression::Unary {
+            operator: ast::UnaryOperator::Not,
+            expr: Box::new(<>),
+            ty: "temp".to_owned(),
+        }
+    },
+    
+    BaseExpr => <>,
+}
+
 // First precedence - right associativity (for unary ops)
 BaseExpr: ast::Expression = {
     "(" <expr:Expression> ")" => ast::Expression::Parenthesized(Box::new(expr)),
+
+    "[" <expressions_multi:(<Expression> ",")*> 
+        <expressions_single:(<Expression>)> 
+    "]" => {
+        let mut expressions = expressions_multi;
+        expressions.push(expressions_single);
+
+        ast::Expression::ArrayConstructor {
+            expressions: expressions.into_iter().map(|e| Box::new(e)).collect(),
+            ty: "temp".to_owned(),
+        }
+    },
 
     Literal => ast::Expression::Literal(<>),
 
@@ -459,21 +491,13 @@ BaseExpr: ast::Expression = {
         ast::Expression::FunctionApply(<>)
     },
 
-    "-" <BaseExpr> => {
+    <b:BaseExpr> "[" <index_expr:Expression> "]" => {
         ast::Expression::Unary {
-            operator: ast::UnaryOperator::Negate,
-            rhs: Box::new(<>),
+            operator: ast::UnaryOperator::Index(Box::new(index_expr)),
+            expr: Box::new(b),
             ty: "temp".to_owned(),
         }
-    },
-
-    "!" <BaseExpr> => {
-        ast::Expression::Unary {
-            operator: ast::UnaryOperator::Not,
-            rhs: Box::new(<>),
-            ty: "temp".to_owned(),
-        }
-    },
+    }
 }
 
 #[inline]
@@ -516,16 +540,18 @@ BoolOp: ast::BinaryOperator = {
 
 // ---------------- IDENTIFIER, LITERAL, TAG ----------------
 
+TypeSpecifier: ast::TypeSpecifier = {
+    <i:Ident> => ast::TypeSpecifier::Identifier(i),
+    "[" <i:Ident> ";" <size:r"[0-9]+"> "]" => ast::TypeSpecifier::Array {
+        ty: i.to_owned(),
+        size: size.parse::<u32>().unwrap(),
+    },
+}
+
 Ident: String = {
     <VEC_IDENTIFIER> => <>.to_owned(),
 
-    <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => {
-
-        // TODO: Move this check to let statements
-        // if <>.len() >= 3 && <>[0..=2].to_owned() == "gl_".to_owned() {
-        //     exit!(format!("Error: The identifier prefix 'gl_' is reserved (used in '{}')", <>));
-        // } 
-        
+    <r"[_a-zA-Z]+[_a-zA-Z0-9]*"> => {        
         // TODO: Reserve "__ident__..." for code generation
 
         <>.to_owned()

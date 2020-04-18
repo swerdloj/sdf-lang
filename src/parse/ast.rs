@@ -9,9 +9,10 @@ pub enum Item {
     Constant(ConstDeclaration),
     Function {
         name: String,
-        parameters: Vec<(Option<FuncParamQualifier>, String, String)>,
+        // ( qualifier, identifier, type )
+        parameters: Vec<(Option<FuncParamQualifier>, String, TypeSpecifier)>,
         // If not specified, return type will be "void"
-        return_type: String,
+        return_type: TypeSpecifier,
         statements: Vec<Statement>,
     },
     Scene {
@@ -21,7 +22,7 @@ pub enum Item {
     Struct {
         name: String,
         // "field: type = optional_default,"
-        fields: Vec<(String, String, Option<Expression>)>,
+        fields: Vec<(String, TypeSpecifier, Option<Expression>)>,
     },
     Implementation {
         struct_name: String,
@@ -51,6 +52,10 @@ pub struct SpannedExpression {
 pub enum Expression {
     Parenthesized(Box<Expression>),
     Literal(Literal),
+    ArrayConstructor{
+        expressions: Vec<Box<Expression>>,
+        ty: String,
+    },
     Identifier(String),
     Binary {
         lhs: Box<Expression>,
@@ -60,7 +65,7 @@ pub enum Expression {
     },
     Unary {
         operator: UnaryOperator,
-        rhs: Box<Expression>,
+        expr: Box<Expression>,
         ty: String,
     },
     FunctionApply(FunctionApply),
@@ -118,6 +123,7 @@ pub enum BinaryOperator {
 
 #[derive(Debug, Clone)]
 pub enum UnaryOperator {
+    Index(Box<Expression>),
     Negate,
     Not,
 }
@@ -134,7 +140,7 @@ pub enum AssignmentOperator {
 #[derive(Debug, Clone)]
 pub struct ConstDeclaration {
     pub ident: String,
-    pub ty: String,
+    pub ty: TypeSpecifier,
     // TODO: When constant expressions are implemented, this must be constant-checked
     pub value: SpannedExpression,
 }
@@ -144,7 +150,7 @@ pub enum Statement {
     Let {
         tag: Option<Tag>,
         ident: String,
-        ty: Option<String>,
+        ty: Option<TypeSpecifier>,
         expression: Option<SpannedExpression>,
     },
     LetConstructor {
@@ -206,6 +212,41 @@ pub enum Tag {
     Texture2D,
     Out,
     // TODO: What else would be needed?
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeSpecifier {
+    Identifier(String),
+    Array {
+        ty: String,
+        size: u32,
+    }
+}
+
+impl TypeSpecifier {
+    pub fn from_ident(id: &str) -> Self {
+        TypeSpecifier::Identifier(id.to_owned())
+    }
+
+    pub fn type_name(&self) -> &str {
+        match self {
+            TypeSpecifier::Identifier(ident) => ident,
+            TypeSpecifier::Array { ty, size: _ } => ty,
+        }
+    }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            TypeSpecifier::Identifier(ident) => ident.clone(),
+            TypeSpecifier::Array { ty, size } => format!("{}[{}]", ty, size),
+        }
+    }
+}
+
+impl std::fmt::Display for TypeSpecifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
 }
 
 #[derive(Debug, Clone)]

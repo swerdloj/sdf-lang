@@ -5,10 +5,16 @@ pub mod functions;
 // TODO: Implement vec casts like uvec to ivec, etc.
 
 
-/// Whether a narrowing conversion via 'as' is valid
+/// Whether a narrowing conversion via 'as' is valid.
 pub fn narrow_castable(from: &str, to: &str) -> Result<bool, String> {
     if from == to {
         return Ok(true);
+    }
+
+    // TODO: Can arrays of the same size cast between compatible base types??
+    if from.contains("[") || to.contains("[") {
+        return Ok(false);
+        // return Err(format!("Arrays cannot be cast (tried casting '{}' to '{}')", from, to));
     }
 
     match from {
@@ -48,6 +54,12 @@ pub fn narrow_castable(from: &str, to: &str) -> Result<bool, String> {
 pub fn castable(from: &str, to: &str) -> Result<bool, String> {
     if from == to {
         return Ok(true);
+    }
+
+    // Cannot cast between array types (even for compatible base types)
+    if from.contains("[") || to.contains("[") {
+        return Ok(false);
+        // return Err(format!("Arrays cannot be cast (tried casting '{}' to '{}')", from, to));
     }
 
     match to {
