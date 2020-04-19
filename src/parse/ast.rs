@@ -159,7 +159,7 @@ pub enum Statement {
     },
     Constant(ConstDeclaration),
     Assignment {
-        lhs: IdentOrMember,
+        lhs: SpannedExpression,
         op: AssignmentOperator,
         expression: SpannedExpression,
     },
@@ -184,12 +184,6 @@ pub enum Statement {
         expression: Expression,
         span: Span,
     },
-}
-
-#[derive(Debug, Clone)]
-pub enum IdentOrMember {
-    Ident(String),
-    Member(Member),
 }
 
 #[derive(Debug, Clone)]

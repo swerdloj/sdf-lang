@@ -237,9 +237,10 @@ pub fn translate_statement(statement: &Statement) -> String {
         
         Statement::Assignment { lhs, op, expression: expr } => {
             let mut left = String::new();
-            match lhs {
-                IdentOrMember::Ident(ident) => left.push_str(ident),
-                IdentOrMember::Member(member) => {
+            match &lhs.expression {
+                Expression::Identifier(ident) => left.push_str(ident),
+                
+                Expression::Member(member) => {
                     for item in &member.path {
                         if let IdentOrFunction::Ident(id) = item {
                             left.push_str(&format!("{}.", id));
@@ -249,6 +250,13 @@ pub fn translate_statement(statement: &Statement) -> String {
                     // Remove trailing "."
                     left.pop();
                 },
+
+                Expression::Unary { operator: UnaryOperator::Index(index_expr), expr, ty } => {
+                    glsl.push_str(&translate_expression(expr));
+                    glsl.push_str(&format!("[{}]", translate_expression(index_expr)));
+                }
+
+                _ => unreachable!(),
             };
 
             glsl.push_str(&format!("{} {} {}", left, match op {

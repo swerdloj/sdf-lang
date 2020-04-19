@@ -1,7 +1,25 @@
 @VERTEX
 
-fn array_test(array: [float; 2]) -> [float; 5] {
+struct ArrayStruct {
+    arr1: [float; 2] = [1., 2],
+    arr2: [float; 3],
+    test: int = 1,
+}
 
+impl ArrayStruct {
+    fn test(self) -> float {
+
+    }
+}
+
+fn array_test(array: [float; 2]) -> [float; 5] {
+    let test: ArrayStruct {
+        arr2: [1, 2, 3.],
+    };
+
+    let x = test.arr1[1];
+    // test.test() = 3;
+    test.arr1[1] = 2;
 }
 
 fn test() -> [double; 3] {
@@ -13,8 +31,7 @@ fn main() {
 
     let test2 = [1, 2, 3.];
 
-    // TODO: Allow index assignment
-    test2[0] = 12;
+    test2[0 + 1] = 12;
 
     let z = 2 * -test_array[1 + 1];
     let x = test_array[0];

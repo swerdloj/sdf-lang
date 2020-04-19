@@ -304,7 +304,7 @@ impl Context {
         &self.outs
     }
 
-    pub fn declare_struct(&mut self, name: String, passed_fields: Vec<(String, TypeSpecifier, Option<ast::Expression>)>) -> Result<(), String> {       
+    pub fn declare_struct(&mut self, name: String, passed_fields: &Vec<(String, TypeSpecifier, Option<ast::Expression>)>) -> Result<(), String> {       
         if self.is_primitive(&name) {
             return Err(format!("Cannot name struct '{}' the same as a primitive type", &name));
         }

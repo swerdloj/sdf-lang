@@ -51,7 +51,20 @@ pub fn validate_ast(ast: &mut AST, input: &Input, context: &mut Context) -> Resu
             }
 
             Item::Struct { name, fields } => {
-                context.declare_struct(name.clone(), fields.clone())?;
+                for (field, ty, expression) in fields.iter_mut() {
+                    if let Some(expr) = expression {
+                        validate_expression(expr, context, input)?;
+                     
+                        let castable = glsl::castable(&context.expression_type(expr)?, &ty.as_string())?;
+                        if !castable {
+                            // TODO: Better error
+                            return Err(format!("Incompatible type assigned to field '{}' of '{}'", field, name));
+                        }
+                    }
+
+                }
+
+                context.declare_struct(name.clone(), &fields)?;
             }
 
             // TODO: Ensure that return statement has same type as function
@@ -137,6 +150,11 @@ pub fn validate_ast(ast: &mut AST, input: &Input, context: &mut Context) -> Resu
 
     Ok(())
 }
+
+// TODO: This
+// fn assign_array_type(expected_tye: &TypeSpecifier, array_constructor: &mut Expression, context: &Context) -> Result<TypeSpecifier, String> {
+
+// }
 
 // Constant declarations are allowed as both Items and Statements
 fn validate_const_declaration(constant: &mut ConstDeclaration, context: &mut Context, input: &Input) -> Result<(), String> {
@@ -356,10 +374,25 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
         Statement::Assignment { lhs, op, expression } => {
             let span = input.evaluate_span(expression.span);
             
-            let mut lhs_type = "temp".to_owned();
+            let mut lhs_type = "__temp__".to_owned();
 
-            match lhs {
-                IdentOrMember::Ident(ident) => {
+            // Only affects array index unary expression
+            validate_expression(&mut lhs.expression, context, input)?;
+            
+            // Determine lhs type
+            match &mut lhs.expression {
+                Expression::Unary { operator: UnaryOperator::Index(index_expr), expr, ty } => {
+                    validate_expression(index_expr.as_mut(), context, input)?;
+                    
+                    let index_type = context.expression_type(index_expr.as_ref())?;
+                    if !glsl::castable(&index_type, "int")? {
+                        return Err(format!("{}\nCannot index using type '{}', must be castable to 'int'", span, index_type));
+                    }
+
+                    lhs_type = ty.split("[").next().unwrap().to_owned();
+                }
+
+                Expression::Identifier(ident) => {
                     let is_constant = context.scopes.is_var_constant(ident).map_err(|e|
                         format!("{}\n{}", input.evaluate_span(expression.span), e)
                     )?;
@@ -369,14 +402,15 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
 
                     lhs_type = context.scopes.var_type(ident)?.as_string();
                 }
+
                 
                 // lhs must be a series of identifiers and fields. No functions.
-                IdentOrMember::Member(member) => {                   
+                Expression::Member(member) => {
                     for item in &member.path {
                         match item {
                             IdentOrFunction::Ident(ident) => {
                                 // First item is a variable. The rest are fields.
-                                if lhs_type == "temp" {
+                                if lhs_type == "__temp__" {
                                     lhs_type = context.scopes.var_type(ident)?.as_string();
                                 } else {
                                     // Check if lhs is the field of a vec
@@ -395,6 +429,10 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
                             }
                         }
                     }
+                }
+
+                _ => {
+                    return Err(format!("{}\nAssignment only works for identifiers, struct fields, and array indexes (tried assigning to '{:?}')", input.evaluate_span(lhs.span), lhs.expression));
                 }
             }
 
@@ -646,7 +684,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context, input
 
         Expression::Member(member) => {
             // First item
-            let mut current_type = String::from("temp");
+            let mut current_type = String::from("__temp__");
             let mut last_ident = String::new();
 
             let mut to_remove = Vec::new();
@@ -657,7 +695,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context, input
             for (index, item) in member.path.iter_mut().enumerate() {
                 match item {
                     IdentOrFunction::Ident(ident) => {
-                        if current_type == "temp" {
+                        if current_type == "__temp__" {
                             // First item must be a variable. Following would be fields.
                             current_type = context.scopes.var_type(ident)?.as_string();
                         } else {
@@ -676,7 +714,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context, input
 
                     // Note that function calls cannot happen before identifiers
                     IdentOrFunction::Function(func) => {
-                        if current_type == "temp" {
+                        if current_type == "__temp__" {
                             return Err(format!("Member methods must be accessed via the '.' operator: '{}'", func.name));
                         }
                         func.name = format!("__{}__{}", current_type, func.name);

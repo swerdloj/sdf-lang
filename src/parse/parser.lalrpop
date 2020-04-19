@@ -222,19 +222,13 @@ StatementBlock: Vec<ast::Statement> = {
 }
 
 AssignmentStatement: ast::Statement = {
-    <lhs:IdentOrMember> <op:AssignmentOperator> <expr:SpannedExpression> ";" => {
+    <lhs:SpannedExpression> <op:AssignmentOperator> <expr:SpannedExpression> ";" => {
         ast::Statement::Assignment {
             lhs,
             op,
             expression: expr,
         }
     },
-}
-
-#[inline]
-IdentOrMember: ast::IdentOrMember = {
-    <Ident> => ast::IdentOrMember::Ident(<>),
-    <Member> => ast::IdentOrMember::Member(<>),
 }
 
 ConstDeclaration: ast::ConstDeclaration = {
@@ -312,7 +306,7 @@ FunctionApply: ast::FunctionApply = {
             name,
             func_parameters: 0usize,
             parameters: params,
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
 }
@@ -330,7 +324,7 @@ FunctionCall: ast::FunctionCall = {
         ast::FunctionCall {
             name,
             parameters: params,
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
 }
@@ -345,7 +339,7 @@ IfExpr: ast::Expression = {
             if_block: statements,
             else_block,
             else_if_block: None,
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
 
@@ -358,7 +352,7 @@ IfExpr: ast::Expression = {
             if_block: statements,
             else_block: None,
             else_if_block: Some(Box::new(else_if_block)),
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
 }
@@ -384,7 +378,7 @@ AdditiveExpr: ast::Expression = {
             lhs: Box::new(lhs),
             operator: op,
             rhs: Box::new(rhs),
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
 
@@ -398,7 +392,7 @@ MultiplicativeExpr: ast::Expression = {
             lhs: Box::new(lhs),
             operator: op,
             rhs: Box::new(rhs),
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
 
@@ -412,11 +406,9 @@ CastExpr: ast::Expression = {
             lhs: Box::new(lhs),
             operator: op,
             rhs: Box::new(rhs),
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
-
-    Member => ast::Expression::Member(<>),
 
     UnaryExpr => <>,
 }
@@ -430,7 +422,7 @@ Member: ast::Member = {
         
         ast::Member {
             path,
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     }
 }
@@ -446,7 +438,7 @@ UnaryExpr: ast::Expression = {
         ast::Expression::Unary {
             operator: ast::UnaryOperator::Negate,
             expr: Box::new(<>),
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
     
@@ -454,7 +446,7 @@ UnaryExpr: ast::Expression = {
         ast::Expression::Unary {
             operator: ast::UnaryOperator::Not,
             expr: Box::new(<>),
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
     
@@ -473,9 +465,11 @@ BaseExpr: ast::Expression = {
 
         ast::Expression::ArrayConstructor {
             expressions: expressions.into_iter().map(|e| Box::new(e)).collect(),
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     },
+
+    Member => ast::Expression::Member(<>),
 
     Literal => ast::Expression::Literal(<>),
 
@@ -495,7 +489,7 @@ BaseExpr: ast::Expression = {
         ast::Expression::Unary {
             operator: ast::UnaryOperator::Index(Box::new(index_expr)),
             expr: Box::new(b),
-            ty: "temp".to_owned(),
+            ty: "__temp__".to_owned(),
         }
     }
 }
