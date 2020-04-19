@@ -200,7 +200,18 @@ impl Context {
         // https://www.khronos.org/opengl/wiki/Built-in_Variable_(GLSL)
         match shader_type {
             ShaderType::Vertex => {
-                // TODO: This
+                // Inputs
+                scopes.add_var_to_scope( "gl_VertexID".to_owned(), TypeSpecifier::from_ident("int"), true).unwrap();
+                scopes.add_var_to_scope( "gl_InstanceID".to_owned(), TypeSpecifier::from_ident("int"), true).unwrap();
+                // Note: These are 4.60+
+                scopes.add_var_to_scope( "gl_DrawID".to_owned(), TypeSpecifier::from_ident("int"), true).unwrap();
+                scopes.add_var_to_scope( "gl_BaseVertex".to_owned(), TypeSpecifier::from_ident("int"), true).unwrap();
+                scopes.add_var_to_scope( "gl_BaseInstance".to_owned(), TypeSpecifier::from_ident("int"), true).unwrap();
+                
+                // Outputs
+                scopes.add_var_to_scope( "gl_Position".to_owned(), TypeSpecifier::from_ident("vec4"), false).unwrap();
+                scopes.add_var_to_scope( "gl_PointSize".to_owned(), TypeSpecifier::from_ident("float"), false).unwrap();
+                // TODO: gl_ClipDistance
             }
 
             ShaderType::Fragment => {

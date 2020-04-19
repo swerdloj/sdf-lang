@@ -218,7 +218,6 @@ pub fn translate_statement(statement: &Statement) -> String {
             if let Some(assignment) = expr {
                 glsl.push_str(&format!(" = {}", translate_expression(&assignment.expression)));
             }
-
         }
         
         // Defaults and ordering will be handled while parsing

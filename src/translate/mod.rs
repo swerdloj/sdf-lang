@@ -150,14 +150,35 @@ fn validate_const_declaration(constant: &mut ConstDeclaration, context: &mut Con
         format!("{}\n{}", span, e)
     )?;
 
-    validate_expression(&mut constant.value.expression, context, input);
+    validate_expression(&mut constant.value.expression, context, input)?;
+
+    let mut castable = false;
+    if let TypeSpecifier::Array { ty, size } = &constant.ty {
+        if let Expression::ArrayConstructor { ty, expressions } = &constant.value.expression {        
+            if *size as usize != expressions.len() {
+                return Err(format!("{}\n Array '{}' was declared as length '{}', but assigned to array of length '{}'", span, constant.ident, size, expressions.len()));
+            } 
+
+            for (i, expr) in expressions.iter().enumerate() {
+                let expr_type = context.expression_type(&expr)?;
+                castable = glsl::castable(&expr_type, &constant.ty.as_string().split("[").next().unwrap()).map_err(|e|
+                    format!("{}\n{}", span, e)
+                )?;
+                if !castable {
+                    return Err(format!("{}\nCould not create array of type '{}' from array initializer (argument {} is incompatible of type '{}')", span, constant.ty, i, expr_type));
+                }
+            }
+        }
+    }
 
     let rhs_type = &context.expression_type(&constant.value.expression).map_err(|e|
         format!("{}\n{}", span, e)
     )?;
-    let castable = glsl::castable(rhs_type, &constant.ty.as_string()).map_err(|e|
-        format!("{}\n{}", span, e)
-    )?;
+    if !castable {
+        castable = glsl::castable(rhs_type, &constant.ty.as_string()).map_err(|e|
+            format!("{}\n{}", span, e)
+        )?;
+    }
 
     if castable {
         // This will be pushed to the global scope by default (no need to push/pop scope)
@@ -231,21 +252,49 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
                 }
             }
 
-            let checked_type = if let Some(specified_type) = ty {
+            let mut checked_type = if let Some(specified_type) = ty {
                 context.validate_type(specified_type)?;
                 // Check whether type assigned is compatible with user-specified
-                if let Some(assignment) = expression {                    
+                if let Some(assignment) = expression { 
+                    let span = input.evaluate_span(assignment.span);     
+
                     let assigned_type = context.expression_type(&mut assignment.expression).map_err(|e| 
-                        format!("{}\n{}", input.evaluate_span(assignment.span), e)
+                        format!("{}\n{}", span, e)
                     )?;
 
-                    let castable = glsl::castable(&assigned_type, &specified_type.as_string()).map_err(|e| 
-                        format!("{}\n{}", input.evaluate_span(assignment.span), e)
-                    )?;
+                    // If specified type is an array, check if assigned array type is of compatible type
+                    
+                    // FIXME: This first branch is very hacky
+                    let castable = if let TypeSpecifier::Array { ty, size } = specified_type {
+                        // If RHS is an anonymous array, check compatibility, and fix its type
+                        if let Expression::ArrayConstructor { expressions, ty: array_t } = &mut assignment.expression {
+                            if expressions.len() != *size as usize {
+                                return Err(format!("{}\nVariable '{}' was assigned to a differently sized array (expected size {}, got {})", span, ident, size, expressions.len()));
+                            }
+                            
+                            let c = glsl::castable(&assigned_type.split("[").next().unwrap(), &array_t).map_err(|e| 
+                                format!("{}\n{}", span, e)
+                            )?;
+
+                            if c {
+                                *array_t = ty.clone();
+                            }
+
+                            c
+                        } else {
+                            glsl::castable(&assigned_type, &specified_type.as_string()).map_err(|e| 
+                                format!("{}\n{}", span, e)
+                            )?
+                        }
+                    } else {   
+                        glsl::castable(&assigned_type, &specified_type.as_string()).map_err(|e| 
+                            format!("{}\n{}", span, e)
+                        )?
+                    };
 
                     if !castable {
                         return Err(format!("{}\nVariable '{}' was declared as type '{}', but assigned to an incompatible type: '{}'",
-                                                input.evaluate_span(assignment.span), &ident, specified_type, &assigned_type));
+                                                span, &ident, specified_type, &assigned_type));
                     }
                 }
                 Some(specified_type.clone())
@@ -264,6 +313,21 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
                     None
                 }
             };
+
+            // FIXME: Hack until context::expression_type returns TypeSpecifier
+            if let Some(t) = &mut checked_type {
+                let ty = t.as_string();
+                if ty.contains("[") {
+                    let mut sp = ty.split("[");
+                    let ty = sp.next().unwrap().to_owned();
+                    let mut size = sp.next().unwrap().to_owned();
+                    size.pop();
+                    *t = TypeSpecifier::Array {
+                        ty,
+                        size: size.parse::<u32>().unwrap(),
+                    };
+                }
+            }
 
             *ty = checked_type.clone();
 
@@ -381,9 +445,29 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
                     format!("{}\n{}", span, e)
                 )?;
 
-                let castable = glsl::castable(&ty, &expected_type.as_string()).map_err(|e| 
-                    format!("{}\n{}", span, e)
-                )?;
+                let mut castable = false;
+                if let TypeSpecifier::Array { ty, size } = &expected_type {
+                    if let Expression::ArrayConstructor { expressions, ty } = &mut expr.expression {
+                        if expressions.len() != *size as usize {
+                            return Err(format!("{}\nExpected array of length {}, but got one of length {}", span, size, expressions.len()));
+                        }
+                        
+                        for (i, e) in expressions.iter().enumerate() {
+                            let expr_type = context.expression_type(e)?;
+                            if !glsl::castable(&expr_type, expected_type.type_name())? {
+                                return Err(format!("{}\nReturned array value number {} is of type '{}' which is incompatible with array type '{}'", span, i+1, expr_type, expected_type));
+                            }
+                        }
+                        *ty = expected_type.type_name().to_owned();
+                        castable = true;
+                    } 
+                }
+
+                if !castable {
+                    castable = glsl::castable(&ty, &expected_type.as_string()).map_err(|e| 
+                        format!("{}\n{}", span, e)
+                    )?;
+                }
 
                 if !castable {
                     return Err(format!("{}\nExpected return type of '{}', but got incompatible type '{}'", span, expected_type, ty));
@@ -459,11 +543,37 @@ fn validate_expression(expression: &mut Expression, context: &mut Context, input
             // TODO: All types need to be checked as compatible (and allow for casting)
             // TODO: Infer type based on *least* compatible type (upcast everything, and that is expected type)
 
+            // Casting hierarchy
+            let mut values = std::collections::HashMap::new();
+            values.insert("uint", 0u8);
+            values.insert("int", 1);
+            values.insert("float", 2);
+            values.insert("double", 3);
+
             for expr in expressions.iter_mut() {
                 validate_expression(expr, context, input)?;
             }
 
-            *ty = context.expression_type(expressions[0].as_ref())?;
+            let mut expected_type = context.expression_type(&expressions[0])?;
+            for expr in expressions.iter().skip(1) {
+                let this_type = context.expression_type(expr)?;
+                if !glsl::castable(&this_type, &expected_type)? {
+                    if values.contains_key(this_type.as_str()) && values.contains_key(expected_type.as_str()) {
+                        if values.get(this_type.as_str()).unwrap() > values.get(expected_type.as_str()).unwrap() {
+                            expected_type = this_type;
+                        } else {
+                            // FIXME: Better error
+                            return Err(format!("Incompatible types"))
+                        }
+                    } else {
+                        // FIXME: Better error
+                        return Err(format!("Incompatible array types"));
+                    }
+                }
+            }
+
+            *ty = expected_type;
+            // *ty = context.expression_type(expressions[0].as_ref())?;
         }
 
         Expression::Parenthesized(expr) => {
@@ -509,7 +619,16 @@ fn validate_expression(expression: &mut Expression, context: &mut Context, input
                         return Err(format!("Arrays can only be indexed by positive integers (tried indexing with type '{}')", index_expr_type));
                     }
 
-                    *ty = index_expr_type;
+                    // TODO: Bounds check the array access once TypeSpecifier is fully implemented
+                    // if let Expression::Literal(literal) = &**index_expr {
+                    //     if let Literal::Int(i) = literal {
+                    //         if i < 0 || i > array_size...
+                    //     } else if let Literal::UInt(i) = literal {
+
+                    //     }
+                    // }
+
+                    *ty = context.expression_type(&expr)?;
                 }
 
                 UnaryOperator::Negate => {

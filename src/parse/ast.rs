@@ -52,7 +52,7 @@ pub struct SpannedExpression {
 pub enum Expression {
     Parenthesized(Box<Expression>),
     Literal(Literal),
-    ArrayConstructor{
+    ArrayConstructor {
         expressions: Vec<Box<Expression>>,
         ty: String,
     },
