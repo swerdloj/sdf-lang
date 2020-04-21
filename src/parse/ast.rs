@@ -33,6 +33,10 @@ pub enum Item {
         file_name: String,
         span: Span,
     },
+    Features {
+        features: Vec<String>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone)]

@@ -1,8 +1,13 @@
 @FRAGMENT
 
+features {
+    time, 
+    window_dimensions,
+}
+
 import sd_primitives;
 
-const MAX_STEPS:        int   = 100;
+const MAX_STEPS:        int   = 128;
 const MAX_DISTANCE:     float = 70.;
 const SURFACE_DISTANCE: float = 0.001;
 

@@ -51,7 +51,18 @@ Item: ast::Item = {
             file_name: id.to_owned(),
             span: (l, r),
         }
-    }
+    },
+
+    // Specify which compiler features to use
+    <l:@L> "features" "{" <single:Ident> <multi:("," <Ident>)*> ","? "}" <r:@R> => {
+        let mut features = multi;
+        features.insert(0, single);
+
+        ast::Item::Features {
+            features,
+            span: (l, r),
+        }
+    },
 }
 
 // ---------------- SCENE ----------------

@@ -16,7 +16,7 @@
 - `vec` type casting (same rules as normal types)
 - `mat` types
 - `sampler` types
-- Arrays
+- Multi dimensional arrays
 ### Expressions
 - `if`/`else` as expressions with return types
 - `match`

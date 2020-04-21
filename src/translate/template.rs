@@ -251,7 +251,7 @@ pub fn translate_statement(statement: &Statement) -> String {
                     left.pop();
                 },
 
-                Expression::Unary { operator: UnaryOperator::Index(index_expr), expr, ty } => {
+                Expression::Unary { operator: UnaryOperator::Index(index_expr), expr, ty: _ } => {
                     glsl.push_str(&translate_expression(expr));
                     glsl.push_str(&format!("[{}]", translate_expression(index_expr)));
                 }
@@ -458,7 +458,7 @@ pub fn translate_expression(expr: &Expression) -> String {
         }
 
         // TODO: Nested indentation is off
-        Expression::If { expression: expr, if_block, else_block, else_if_block, ty } => {
+        Expression::If { expression: expr, if_block, else_block, else_if_block, ty: _ } => {
             glsl.push_str(&format!("if ({}) {{\n", translate_expression(expr)));
             
             for stmt in if_block {   

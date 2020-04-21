@@ -12,12 +12,16 @@ use gl::types::*;
 use crate::parse;
 
 use std::path::PathBuf;
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 
 pub struct Runtime {
     sdf_path: PathBuf,
+    
     /// name -> (location, type)
     uniforms: HashMap<String, (usize, parse::ast::TypeSpecifier)>,
+
+    features: HashSet<String>,
+
     /// One VAO must be bound to draw anything
     _dummy_vao: opengl::DummyVAO,
 }
@@ -30,6 +34,7 @@ impl Runtime {
         Runtime {
             sdf_path: sdf_path.into(),
             uniforms: HashMap::new(),
+            features: HashSet::new(),
             _dummy_vao: dummy_vao,
         }
     }
@@ -59,7 +64,8 @@ impl Runtime {
             return;
         }
 
-        let glsl = crate::translate::translate(&ast.unwrap(), context.as_ref().unwrap());
+        let c = context.unwrap();
+        let glsl = crate::translate::translate(&ast.unwrap(), &c);
 
         let default_vertex_shader = opengl::Shader::from_vertex_source(
             &opengl::read_file_to_cstring("./src/runtime/shaders/full_screen.vert")
@@ -73,7 +79,8 @@ impl Runtime {
             default_vertex_shader, fragment_shader
         ]).unwrap();
 
-        context.unwrap().get_uniform_map(&mut self.uniforms);
+        c.get_uniform_map(&mut self.uniforms);
+        c.get_features(&mut self.features);
 
         gl_program.set_used();
     }
@@ -88,15 +95,19 @@ impl Runtime {
 
     /// Update the shader's window dimension value
     pub fn set_window_dimensions(&mut self, width: i32, height: i32) {
-        unsafe {
-            gl::Uniform2fv(self.get_uniform_location("window_dimensions").unwrap(), 1, &[width as GLfloat, height as GLfloat] as *const _);
+        if self.features.contains("window_dimensions") {
+            unsafe {
+                gl::Uniform2fv(self.get_uniform_location("window_dimensions").unwrap(), 1, &[width as GLfloat, height as GLfloat] as *const _);
+            }
         }
     }
 
     /// Update the shader's time value
     pub fn set_time(&mut self, seconds: f32) {
-        unsafe {
-            gl::Uniform1f(self.get_uniform_location("time").unwrap(), seconds);
+        if self.features.contains("time") {
+            unsafe {
+                gl::Uniform1f(self.get_uniform_location("time").unwrap(), seconds);
+            }
         }
     }
 

@@ -156,6 +156,9 @@ pub struct Context {
     uniforms: HashSet<(String, TypeSpecifier, /* DEFAULT VALUE HERE */)>,
     outs: HashSet<(String, TypeSpecifier, /* DEFAULT VALUE HERE */)>,
 
+    // TODO: This
+    pub features: HashSet<String>,
+
     pub scopes: Scope,
 }
 
@@ -222,9 +225,18 @@ impl Context {
                 
                 // TODO: Add the rest
             }
-
+            
             ShaderType::Compute => {
-                // TODO: This
+                scopes.add_var_to_scope( "gl_NumWorkGroups".to_owned(), TypeSpecifier::from_ident("uvec3"), true).unwrap();
+                scopes.add_var_to_scope( "gl_WorkGroupID".to_owned(), TypeSpecifier::from_ident("uvec3"), true).unwrap();
+                scopes.add_var_to_scope( "gl_LocalInvocationID".to_owned(), TypeSpecifier::from_ident("uvec3"), true).unwrap();
+                scopes.add_var_to_scope( "gl_GlobalInvocationID".to_owned(), TypeSpecifier::from_ident("uvec3"), true).unwrap();
+                scopes.add_var_to_scope( "gl_LocalInvocationIndex".to_owned(), TypeSpecifier::from_ident("uint"), true).unwrap();
+                
+                // GLSL 4.30+
+                scopes.add_var_to_scope( "gl_WorkGroupSize".to_owned(), TypeSpecifier::from_ident("uvec3"), true).unwrap();
+
+                // TODO: Add the rest
             }
 
             ShaderType::Library => {
@@ -232,17 +244,8 @@ impl Context {
             }
         }
 
-        
         // Libraries should not require feature usage
         if *shader_type != ShaderType::Library {   
-            // TODO: Make these features optional via opt-in (like "use time ...")
-
-            uniforms.insert(("time".to_owned(), TypeSpecifier::from_ident("float")));
-            uniforms.insert(("window_dimensions".to_owned(), TypeSpecifier::from_ident("vec2")));
-            uniforms.insert(("mouse_position".to_owned(), TypeSpecifier::from_ident("vec2")));
-            
-            scopes.add_var_to_scope( "time".to_owned(), TypeSpecifier::from_ident("float"), false              ).unwrap();
-            scopes.add_var_to_scope( "window_dimensions".to_owned(), TypeSpecifier::from_ident("vec2"), false  ).unwrap();
         }
 
         Context {
@@ -252,8 +255,42 @@ impl Context {
             primitive_types,
             uniforms,
             outs,
+            features: HashSet::new(),
             scopes,
         }
+    }
+
+    pub fn use_feature(&mut self, feature: &str) -> Result<(), String> {
+        if self.shader_type == ShaderType::Library {
+            return Err(format!("Features cannot be used in libraries"));
+        }
+
+        if !self.features.insert(feature.to_owned()) {
+            return Err(format!("The feature '{}' was declared multiple times", feature));
+        }
+
+        match feature {
+            "time" => {
+                self.uniforms.insert((feature.to_owned(), TypeSpecifier::from_ident("float")));
+                self.scopes.add_var_to_scope( feature.to_owned(), TypeSpecifier::from_ident("float"), false).unwrap();    
+            }
+
+            "window_dimensions" => {
+                self.uniforms.insert((feature.to_owned(), TypeSpecifier::from_ident("vec2")));
+                self.scopes.add_var_to_scope( feature.to_owned(), TypeSpecifier::from_ident("vec2"), false).unwrap();    
+            }
+            
+            "mouse_position" => {
+                self.uniforms.insert((feature.to_owned(), TypeSpecifier::from_ident("vec2")));
+                self.scopes.add_var_to_scope( feature.to_owned(), TypeSpecifier::from_ident("vec2"), false).unwrap();    
+            }
+
+            _ => {
+                return Err(format!("No such feature: '{}'", feature));
+            }
+        }
+
+        Ok(())
     }
 
     pub fn add_var_to_scope(&mut self, name: String, ty: TypeSpecifier, is_constant: bool) -> Result<(), String> {
@@ -290,6 +327,10 @@ impl Context {
             map.insert(name.clone(), (location, ty.clone()));
             location += 1;
         }
+    }
+
+    pub fn get_features(&self, map: &mut HashSet<String>) {
+        *map = self.features.clone();
     }
     
     pub fn declare_out(&mut self, name: String, ty: TypeSpecifier /*, initial_value: ?? */) -> Result<(), String> {
@@ -433,7 +474,7 @@ impl Context {
     // TODO: Do not allow vec constructors to pass through here
     pub fn check_function_apply(&self, name: &str, passed_param_types: Vec<TypeSpecifier>) -> Result<(usize, TypeSpecifier), String> {
         if glsl::functions::is_builtin(name) {
-            let ty = glsl::functions::can_arrow( name, &passed_param_types )?;
+            let _ty = glsl::functions::can_arrow( name, &passed_param_types )?;
             return Ok((2, passed_param_types[0].clone()));
         }
         

@@ -25,7 +25,19 @@ pub fn validate_ast(ast: &mut AST, input: &Input, context: &mut Context) -> Resu
     
     for (index, item) in ast.iter_mut().enumerate() {
         match item {
-            Item::Import{ file_name, span } => {
+            Item::Features { features, span } => {
+                let span = input.evaluate_span(*span);
+
+                if context.features.len() > 0 {
+                    return Err(format!("{}\n'features' were declared multiple times. Please combine these uses.", span));
+                }
+
+                for ref feature in features {
+                    context.use_feature(feature).map_err(|e| format!("{}\n{}", span, e))?;
+                }
+            }
+
+            Item::Import { file_name, span } => {
                 let span = input.evaluate_span(*span);
                 
                 let mut new_path = input.path.clone();
@@ -171,8 +183,8 @@ fn validate_const_declaration(constant: &mut ConstDeclaration, context: &mut Con
     validate_expression(&mut constant.value.expression, context, input)?;
 
     let mut castable = false;
-    if let TypeSpecifier::Array { ty, size } = &constant.ty {
-        if let Expression::ArrayConstructor { ty, expressions } = &constant.value.expression {        
+    if let TypeSpecifier::Array { ty: _, size } = &constant.ty {
+        if let Expression::ArrayConstructor { ty: _, expressions } = &constant.value.expression {        
             if *size as usize != expressions.len() {
                 return Err(format!("{}\n Array '{}' was declared as length '{}', but assigned to array of length '{}'", span, constant.ident, size, expressions.len()));
             } 
@@ -381,7 +393,7 @@ fn validate_statement(statement: &mut Statement, context: &mut Context, input: &
             
             // Determine lhs type
             match &mut lhs.expression {
-                Expression::Unary { operator: UnaryOperator::Index(index_expr), expr, ty } => {
+                Expression::Unary { operator: UnaryOperator::Index(index_expr), expr: _, ty } => {
                     validate_expression(index_expr.as_mut(), context, input)?;
                     
                     let index_type = context.expression_type(index_expr.as_ref())?;
@@ -795,7 +807,7 @@ fn validate_expression(expression: &mut Expression, context: &mut Context, input
 
         // TODO: `If` is currently only treated as a statement. 
         //       Implement typing and translation for expression usage.
-        Expression::If { expression, if_block, else_block, else_if_block, ty } => {
+        Expression::If { expression, if_block, else_block, else_if_block, ty: _ } => {
             validate_expression(expression, context, input)?;
 
             context.scopes.push_scope(ScopeType::If);
@@ -859,7 +871,8 @@ pub fn translate(ast: &AST, context: &Context) -> String {
     for item in ast {
         // `Item`s always have global scopes
         match item {
-            Item::Import { .. } => {
+            Item::Features { .. } 
+            | Item::Import { .. } => {
                 // Nothing to do here
             }
 
