@@ -1,7 +1,8 @@
 # sdf-lang
-**sdf-lang** is a domain-specific language for describing signed distance fields.  
+**sdf-lang** was created as a domain-specific language for describing signed distance fields.  
 
-`.sdf` files are transpiled to GLSL for use with a raymarching renderer.
+`.sdf` files are transpiled to GLSL and may serve as a GLSL alternative rather than just a domain specific language.  
+The integrated runtime allows for shadertoy-like usage on the desktop.  
 
 ## Compiler
 - Run `compiler` with the following arguments
