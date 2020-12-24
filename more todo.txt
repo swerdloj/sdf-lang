@@ -1,0 +1,21 @@
+sdf-lang Resume:
+-Finish implementing TypeSpecifier
+-Do not add header to @LIBs
+-Buffers
+-Track which files have been imported (prevent importing more than once)
+-Do not allow uniforms or outs in @LIBs
+-Only import functions that are used (rather than copy/pasting entire file)
+-Add indentation counter to translator
+-Explicit self in/out qualifiers
+-Allow function params to be const
+-Make functions require return w/ type
+-Convert Strings to &strs to fix memory usage
+-Continue error spans
+-Fix int/uint interactions
+-Mark expressions as being compile-time worthy
+-Render a quad in vertex shader and interpolate the uv coords rather than calculating them per-pixel
+-Use my struct implementations to create a SDF library (cameras and everything)
+-Post-processing and frame buffers
+  - Chromatic Aberration, glitch, etc.
+-AA
+  - MSAA, SMAA, TAA

@@ -206,6 +206,9 @@ fn main() {
         let ray_direction = camera.ray_direction(uv);
         color = render(camera.position, ray_direction);
     }
+	
+	// Magic banding-removal function by iq : https://www.shadertoy.com/view/3lj3DW
+	color += fract(sin(gl_FragCoord.x*vec3(13,1,11)+gl_FragCoord.y*vec3(1,7,5))*158.391832)/255.0;
 
     
     out_color = vec4(color, 1.);
